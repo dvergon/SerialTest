@@ -1,0 +1,2 @@
+rootProject.name='CYM_TestSerial'
+include ':app'
