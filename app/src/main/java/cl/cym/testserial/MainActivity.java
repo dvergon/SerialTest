@@ -29,8 +29,8 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity implements SerialInputOutputManager.Listener {
 
-    private static final int WRITE_WAIT_MILLIS = 25;
-    private static final int READ_WAIT_MILLIS = 25;
+    private static final int WRITE_WAIT_MILLIS = 200;
+    private static final int READ_WAIT_MILLIS = 200;
     private UsbSerialPort currentConnection;
     private List<UsbSerialDriver> availableDrivers;
     private UsbManager manager;
@@ -41,6 +41,7 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
     private ArrayList<String> streamHistory;
     private ArrayAdapter<String> streamHistoryAdapter;
     private Thread pollerThread;
+    private boolean pollStartAllowed;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,6 +49,7 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
         setContentView(R.layout.activity_main);
 
         this.pollerThread = new Thread();
+        this.pollStartAllowed = true;
 
         usbAttachReceiver = new BroadcastReceiver() {
             @Override
@@ -121,6 +123,7 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
                 connectedStatus.setText("Connected");
                 this.setConnected(true);
 
+                this.pollStartAllowed = true;
                 this.pollerThread = new Thread(new Poller());
                 this.pollerThread.start();
 
@@ -174,7 +177,6 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
         return connected;
     }
 
-    //sends info through serial
     public void serialWrite(byte[] request) throws IOException {
 
         if(this.isConnected()) {
@@ -206,6 +208,14 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
 
             //ignore
         }
+
+        try {
+            this.currentConnection.purgeHwBuffers(false, true);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        this.pollStartAllowed = true;
     }
 
     @Override
@@ -219,17 +229,22 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
         @Override
         public void run(){
 
-            while(!Thread.interrupted()){
+            while(true){
 
-                byte[] poll = new byte[1];
-                poll[0] = intToByte(83);
+                if(pollStartAllowed){
 
-                byte[] formattedStream = formatStream(poll, false);
+                    byte[] poll = new byte[1];
+                    poll[0] = intToByte(83);
 
-                try {
-                    serialWrite(formattedStream);
-                } catch (IOException e) {
-                    e.printStackTrace();
+                    byte[] formattedStream = formatStream(poll, false);
+
+                    try {
+                        serialWrite(formattedStream);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+                    pollStartAllowed = false;
                 }
             }
         }
