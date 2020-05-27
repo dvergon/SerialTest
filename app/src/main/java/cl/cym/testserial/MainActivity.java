@@ -42,11 +42,14 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
     private ArrayAdapter<String> streamHistoryAdapter;
     private Thread pollerThread;
     private boolean pollStartAllowed;
+    private ByteHandleUtils byteUtils;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        this.byteUtils = new ByteHandleUtils();
 
         this.pollerThread = new Thread();
         this.pollStartAllowed = true;
@@ -99,16 +102,6 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
         });*/
     }
 
-    public boolean isConnected(){
-
-        return this.isConnected;
-    }
-
-    public void setConnected(boolean status){
-
-        this.isConnected = status;
-    }
-
     private void appSerialConnect(){
 
         this.getAllDrivers();
@@ -124,7 +117,7 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
                 this.setConnected(true);
 
                 this.pollStartAllowed = true;
-                this.pollerThread = new Thread(new Poller());
+                this.pollerThread = new Thread(new SerialPoller(this));
                 this.pollerThread.start();
 
             }else{
@@ -187,16 +180,16 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
     @Override
     public void onNewData(byte[] data) {
 
-        if(byteToInt(data[0]) == 127){
+        if(this.byteUtils.byteToInt(data[0]) == 127){
 
             //valid stream. accept and process.
 
             //check response id
-            switch(byteToInt(data[1])){
+            switch(this.byteUtils.byteToInt(data[1])){
 
                 case 83:
                     //POLL RESPONSE
-                    this.streamHistory.add("("+(this.streamHistory.size()+1)+") "+intArrayToString(byteArrayToUnsignedIntArray(data)));
+                    this.streamHistory.add("("+(this.streamHistory.size()+1)+") "+this.byteUtils.intArrayToString(this.byteUtils.byteArrayToUnsignedIntArray(data)));
                     this.streamHistoryAdapter.notifyDataSetChanged();
 
                     break;
@@ -223,33 +216,6 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
 
     }
 
-    //POLL
-    private class Poller implements Runnable{
-
-        @Override
-        public void run(){
-
-            while(!Thread.interrupted()){
-
-                if(pollStartAllowed){
-
-                    byte[] poll = new byte[1];
-                    poll[0] = intToByte(83);
-
-                    byte[] formattedStream = formatStream(poll, false);
-
-                    try {
-                        serialWrite(formattedStream);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-
-                    pollStartAllowed = false;
-                }
-            }
-        }
-    }
-
     //UTILS
     //formats byte stream. adds 127 as header and CRC16 MSL LSB to end
     public byte[] formatStream(byte[] command, boolean addCRC16){
@@ -257,10 +223,10 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
         byte[] dataStream;
 
         byte[] header = new byte[1];
-        header[0] = intToByte(127);
+        header[0] = this.byteUtils.intToByte(127);
 
         byte[] headerCommand;
-        headerCommand = combineByteArray(header, command);
+        headerCommand = this.byteUtils.combineByteArray(header, command);
 
         dataStream = headerCommand;
 
@@ -269,7 +235,7 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
             byte[] crc16 = calculateCRC16(command);
 
             byte[] headerCommandTail;
-            headerCommandTail = combineByteArray(headerCommand, crc16);
+            headerCommandTail = this.byteUtils.combineByteArray(headerCommand, crc16);
 
             dataStream = headerCommandTail;
         }
@@ -296,60 +262,113 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
         return CRC16Final;
     }
 
-    public int[] byteArrayToUnsignedIntArray(byte[] stream){
+    //GETTER AND SETTERS
 
-        int[] unsignedIntStream = new int[stream.length];
+    public boolean isConnected(){
 
-        for(int index = 0; index < stream.length; index++){
-
-            unsignedIntStream[index] = Byte.toUnsignedInt(stream[index]);
-        }
-
-        return unsignedIntStream;
+        return this.isConnected;
     }
 
-    public String intArrayToString(int[] content){
+    public void setConnected(boolean status){
 
-        String output = "";
-
-        for(int index = 0; index < content.length; index++){
-
-            output += "["+content[index]+"]";
-        }
-
-        return output;
+        this.isConnected = status;
     }
 
-    public int byteToInt(byte b){
+    public boolean isPollStartAllowed(){
 
-        return Byte.toUnsignedInt(b);
+        return this.pollStartAllowed;
     }
 
-    public byte intToByte(int byteIntValue){
+    public UsbSerialPort getCurrentConnection(){
 
-        //integer to hexstring
-        String hex = Integer.toHexString(byteIntValue);
-
-        //hexstring to byte
-        byte[] val = new byte[hex.length() / 2];
-
-        for (int i = 0; i < val.length; i++) {
-            int index = i * 2;
-            int j = Integer.parseInt(hex.substring(index, index + 2), 16);
-            val[i] = (byte) j;
-        }
-
-        //should never go over 255 (1 byte)
-        byte b = val[0];
-
-        return b;
+        return this.currentConnection;
     }
 
-    public static byte[] combineByteArray(byte[] a, byte[] b){
-        int length = a.length + b.length;
-        byte[] result = new byte[length];
-        System.arraycopy(a, 0, result, 0, a.length);
-        System.arraycopy(b, 0, result, a.length, b.length);
-        return result;
+    public static int getWriteWaitMillis() {
+        return WRITE_WAIT_MILLIS;
+    }
+
+    public static int getReadWaitMillis() {
+        return READ_WAIT_MILLIS;
+    }
+
+    public void setCurrentConnection(UsbSerialPort currentConnection) {
+        this.currentConnection = currentConnection;
+    }
+
+    public List<UsbSerialDriver> getAvailableDrivers() {
+        return availableDrivers;
+    }
+
+    public void setAvailableDrivers(List<UsbSerialDriver> availableDrivers) {
+        this.availableDrivers = availableDrivers;
+    }
+
+    public UsbManager getManager() {
+        return manager;
+    }
+
+    public void setManager(UsbManager manager) {
+        this.manager = manager;
+    }
+
+    public SerialInputOutputManager getUsbIoManager() {
+        return usbIoManager;
+    }
+
+    public void setUsbIoManager(SerialInputOutputManager usbIoManager) {
+        this.usbIoManager = usbIoManager;
+    }
+
+    public BroadcastReceiver getUsbAttachReceiver() {
+        return usbAttachReceiver;
+    }
+
+    public void setUsbAttachReceiver(BroadcastReceiver usbAttachReceiver) {
+        this.usbAttachReceiver = usbAttachReceiver;
+    }
+
+    public BroadcastReceiver getUsbDetachReceiver() {
+        return usbDetachReceiver;
+    }
+
+    public void setUsbDetachReceiver(BroadcastReceiver usbDetachReceiver) {
+        this.usbDetachReceiver = usbDetachReceiver;
+    }
+
+    public ArrayList<String> getStreamHistory() {
+        return streamHistory;
+    }
+
+    public void setStreamHistory(ArrayList<String> streamHistory) {
+        this.streamHistory = streamHistory;
+    }
+
+    public ArrayAdapter<String> getStreamHistoryAdapter() {
+        return streamHistoryAdapter;
+    }
+
+    public void setStreamHistoryAdapter(ArrayAdapter<String> streamHistoryAdapter) {
+        this.streamHistoryAdapter = streamHistoryAdapter;
+    }
+
+    public Thread getPollerThread() {
+        return pollerThread;
+    }
+
+    public void setPollerThread(Thread pollerThread) {
+        this.pollerThread = pollerThread;
+    }
+
+    public void setPollStartAllowed(boolean pollStartAllowed) {
+        this.pollStartAllowed = pollStartAllowed;
+    }
+
+    public ByteHandleUtils getByteUtils() {
+        return byteUtils;
+    }
+
+    public void setByteUtils(ByteHandleUtils byteUtils) {
+        this.byteUtils = byteUtils;
     }
 }
