@@ -30,7 +30,7 @@ import java.util.concurrent.Executors;
 public class MainActivity extends AppCompatActivity implements SerialInputOutputManager.Listener {
 
     private static final int WRITE_WAIT_MILLIS = 200;
-    private static final int READ_WAIT_MILLIS = 200;
+    private static final int READ_WAIT_MILLIS = 300;
     private UsbSerialPort currentConnection;
     private List<UsbSerialDriver> availableDrivers;
     private UsbManager manager;
@@ -116,7 +116,7 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
         TextView connectedStatus = (TextView) findViewById(R.id.text_status);
 
         try {
-            boolean connected = openSerial(0, 115200);
+            boolean connected = openSerial(0, 9600);
 
             if(connected){
 
@@ -229,7 +229,7 @@ public class MainActivity extends AppCompatActivity implements SerialInputOutput
         @Override
         public void run(){
 
-            while(true){
+            while(!Thread.interrupted()){
 
                 if(pollStartAllowed){
 
