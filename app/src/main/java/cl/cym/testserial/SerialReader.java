@@ -4,16 +4,14 @@ import java.io.IOException;
 
 public class SerialReader implements Runnable {
 
-    private SerialComms serialComms;
+    private static SerialComms serialComms;
     private byte[] readBuffer;
     private byte[] finalRead;
     private int noReadLoopCount;
     private int maxReadTimeout;
-    private ByteHandleUtils byteUtils;
 
     public SerialReader(SerialComms serialComms, int maxReadTimeout){
 
-        this.byteUtils = new ByteHandleUtils();
         this.serialComms = serialComms;
         this.maxReadTimeout = maxReadTimeout;
         this.noReadLoopCount = 0;
@@ -28,22 +26,15 @@ public class SerialReader implements Runnable {
     public void run(){
 
         boolean isReading = true;
-        this.serialComms.setReading(isReading);
+        SerialComms.setReading(isReading);
 
         long readingStartTS = System.currentTimeMillis();
         this.noReadLoopCount = 0;
 
-        //purge read buffer
-        try {
-            this.serialComms.purgeHwBuffers(false, true);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
         while(isReading){
 
             try {
-                int len = this.serialComms.getCurrentConnection().read(this.readBuffer, this.serialComms.getReadWaitMillis());
+                int len = this.serialComms.getCurrentConnection().read(this.readBuffer, SerialComms.getReadWaitMillis());
 
                 byte[] readFragment;
 
@@ -73,7 +64,7 @@ public class SerialReader implements Runnable {
 
                     }else{
 
-                        byte[] tempFinalRead = this.byteUtils.combineByteArray(this.finalRead, readFragment);
+                        byte[] tempFinalRead = ByteHandleUtils.combineByteArray(this.finalRead, readFragment);
 
                         this.finalRead = tempFinalRead;
                     }
@@ -85,18 +76,40 @@ public class SerialReader implements Runnable {
 
                 this.readBuffer = new byte[10240];
 
-                if(System.currentTimeMillis() - readingStartTS >= this.maxReadTimeout && this.noReadLoopCount >= 3){
+                if(System.currentTimeMillis() - readingStartTS >= this.maxReadTimeout || this.noReadLoopCount >= 3){
 
                     isReading = false;
-                    this.serialComms.setReading(isReading);
 
-                    this.serialComms.queueStream(new ByteStream(this.finalRead));
+                    synchronized (serialComms){
+
+                        serialComms.setReading(isReading);
+                    }
+
+                    /*remove 189 last byte
+                    if(ByteHandleUtils.byteToInt(this.finalRead[this.finalRead.length-1]) == 189){
+
+                        byte[] tempStream = new byte[this.finalRead.length-1];
+
+                        for(int index = 0; index < tempStream.length; index++){
+
+                            tempStream[index] = this.finalRead[index];
+                        }
+
+                        this.finalRead = tempStream;
+                    }*/
+
+                    synchronized (serialComms){
+                        SerialComms.queueStream(new ByteStream(this.finalRead), "processing");
+                    }
+
+
+                    //this.getSerialComms().addStreamToList(ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(this.finalRead)));
                 }
 
             } catch (IOException e) {
                 e.printStackTrace();
                 isReading = false;
-                this.serialComms.setReading(isReading);
+                SerialComms.setReading(isReading);
             }
         }
     }
@@ -139,13 +152,5 @@ public class SerialReader implements Runnable {
 
     public void setMaxReadTimeout(int maxReadTimeout) {
         this.maxReadTimeout = maxReadTimeout;
-    }
-
-    public ByteHandleUtils getByteUtils() {
-        return byteUtils;
-    }
-
-    public void setByteUtils(ByteHandleUtils byteUtils) {
-        this.byteUtils = byteUtils;
     }
 }

@@ -14,6 +14,7 @@ public class ByteStream {
         this.creationTS = System.currentTimeMillis();
         this.isProcessed = false;
         this.status = "received";
+
     }
 
     public byte[] getStream() {
@@ -54,5 +55,11 @@ public class ByteStream {
 
     public void setProcessingTS(long processingTS) {
         this.processingTS = processingTS;
+    }
+
+    @Override
+    public String toString(){
+
+        return ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(this.stream));
     }
 }

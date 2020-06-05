@@ -1,12 +1,27 @@
 package cl.cym.testserial;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
 public class ByteHandleUtils {
+
+    private static ByteHandleUtils self;
 
     public ByteHandleUtils(){
 
     }
 
-    public int[] byteArrayToUnsignedIntArray(byte[] stream){
+    public static ByteHandleUtils getInstance(){
+
+        if(self == null){
+
+            self = new ByteHandleUtils();
+        }
+
+        return self;
+    }
+
+    public static int[] byteArrayToUnsignedIntArray(byte[] stream){
 
         int[] unsignedIntStream = new int[stream.length];
 
@@ -18,7 +33,24 @@ public class ByteHandleUtils {
         return unsignedIntStream;
     }
 
-    public String intArrayToString(int[] content){
+
+    public static int threeByteArrayToInteger(byte[] array){
+
+        byte[] fourBytes = new byte[4];
+
+        for(int index = 0; index < 3; index++){
+
+            fourBytes[3-index] = array[2-index];
+        }
+
+        fourBytes[0] = intToByte(0);
+
+        ByteBuffer wrapped = ByteBuffer.wrap(array);
+
+        return wrapped.getInt();
+    }
+
+    public static String intArrayToString(int[] content){
 
         String output = "";
 
@@ -30,12 +62,12 @@ public class ByteHandleUtils {
         return output;
     }
 
-    public int byteToInt(byte b){
+    public static int byteToInt(byte b){
 
         return Byte.toUnsignedInt(b);
     }
 
-    public byte intToByte(int byteIntValue){
+    public static byte intToByte(int byteIntValue){
 
         //integer to hexstring
         String hex = Integer.toHexString(byteIntValue);
@@ -55,11 +87,51 @@ public class ByteHandleUtils {
         return b;
     }
 
+    public static byte[] intToByteArray(int number, int arrayLength){
+
+        byte[] intToBytes = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(number).array();
+        byte[] result = new byte[arrayLength];
+
+        for(int index = 1; index < intToBytes.length; index++){
+
+            result[index-1] = intToBytes[index];
+        }
+
+        return result;
+    }
+
     public static byte[] combineByteArray(byte[] a, byte[] b){
         int length = a.length + b.length;
         byte[] result = new byte[length];
         System.arraycopy(a, 0, result, 0, a.length);
         System.arraycopy(b, 0, result, a.length, b.length);
         return result;
+    }
+
+    public static byte[] getBytesFromByteArray(byte[] byteArray, int startIndex, int qty){
+
+        byte[] result = new byte[qty];
+
+        for(int index = 0; index < result.length; index++){
+
+            result[index] = byteArray[startIndex+index];
+        }
+
+        return result;
+    }
+
+    public static byte[] calculateCRC16(byte[] bytes){
+
+        byte[] CRC16Long;
+        byte[] CRC16Final = new byte[2];
+
+        long crc = CRCUtils.calculateCRC(CRCUtils.Parameters.XMODEM, bytes);
+
+        CRC16Long = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putLong(crc).array();
+        //Toast.makeText(getApplicationContext(), intArrayToString(byteArrayToUnsignedIntArray(CRC16Long)) ,Toast.LENGTH_SHORT).show();
+        CRC16Final[0] ^= CRC16Long[6] & 0xff;
+        CRC16Final[1] ^= CRC16Long[7] & 0xff;
+
+        return CRC16Final;
     }
 }

@@ -16,17 +16,12 @@ public class SerialWriter implements Runnable {
     @Override
     public void run(){
 
-        //purge write buffer
         try {
-            this.serialComms.getCurrentConnection().purgeHwBuffers(true, false);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+            synchronized (serialComms){
+                SerialComms.serialWrite(this.byteStream.getStream());
 
-        try {
-            this.serialComms.serialWrite(this.byteStream.getStream());
-
-            this.serialComms.saveSentStream(this.byteStream);
+                SerialComms.saveSentStream(this.byteStream);
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }

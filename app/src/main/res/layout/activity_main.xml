@@ -20,10 +20,51 @@
     <ListView
         android:id="@+id/list_streamHistory"
         android:layout_width="320dp"
-        android:layout_height="260dp"
+        android:layout_height="0dp"
         android:layout_marginBottom="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/btn_sent" />
+
+    <Button
+        android:id="@+id/btn_start"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="94dp"
+        android:layout_marginBottom="222dp"
+        android:text="Connect"
+        app:layout_constraintBottom_toTopOf="@+id/list_streamHistory"
+        app:layout_constraintStart_toStartOf="@+id/text_status"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/btn_sent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="149dp"
+        android:layout_marginBottom="167dp"
+        android:text="Sent"
+        app:layout_constraintBottom_toTopOf="@+id/list_streamHistory"
+        app:layout_constraintEnd_toEndOf="@+id/btn_start"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/btn_process"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:text="Process"
+        app:layout_constraintBaseline_toBaselineOf="@+id/btn_sent"
+        app:layout_constraintStart_toEndOf="@+id/btn_sent" />
+
+    <Button
+        android:id="@+id/btn_writing"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:text="Writing"
+        app:layout_constraintBaseline_toBaselineOf="@+id/btn_process"
+        app:layout_constraintStart_toEndOf="@+id/btn_process" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

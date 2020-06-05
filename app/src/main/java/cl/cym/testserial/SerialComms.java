@@ -3,6 +3,7 @@ package cl.cym.testserial;
 import android.content.Context;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
+import android.util.Log;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -20,39 +21,51 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class SerialComms extends AppCompatActivity implements Runnable {
 
-    private MainActivity activityRef;
+    private static SerialComms serial;
+    private static ByteStreamProcessor streamProcessor;
+    private static MainActivity activityRef;
     private static final int WRITE_WAIT_MILLIS = 200;
     private static final int READ_WAIT_MILLIS = 200;
-    private int baudRate;
-    private UsbSerialPort currentConnection;
-    private List<UsbSerialDriver> availableDrivers;
-    private UsbManager manager;
-    private SerialInputOutputManager usbIoManager;
-    private ByteHandleUtils byteUtils;
-    private ConcurrentLinkedQueue<ByteStream> pendingProcessStreams;
-    private ConcurrentLinkedQueue<ByteStream> pendingWritingStreams;
-    private ConcurrentLinkedQueue<ByteStream> processedStreams;
-    private ConcurrentLinkedQueue<ByteStream> sentStreams;
-    private Thread paymentThread;
-    private Thread rechargeThread;
-    private Thread serialReadingThread;
-    private Thread serialWritingThread;
-    private boolean connected;
-    private boolean reading;
-    private boolean writing;
+    private static int baudRate = 57600;
+    private static UsbSerialPort currentConnection;
+    private static List<UsbSerialDriver> availableDrivers;
+    private static UsbManager manager;
+    private static SerialInputOutputManager usbIoManager;
+    private static ConcurrentLinkedQueue<ByteStream> pendingProcessStreams;
+    private static ConcurrentLinkedQueue<ByteStream> pendingWritingStreams;
+    private static ConcurrentLinkedQueue<ByteStream> processedStreams;
+    private static ConcurrentLinkedQueue<ByteStream> sentStreams;
+    private static Thread paymentThread;
+    private static Thread rechargeThread;
+    private static Thread serialReadingThread;
+    private static Thread serialWritingThread;
+    private static Thread streamProcessorThread;
+    private static boolean connected;
+    private static boolean reading;
+    private static boolean writing;
 
-    public SerialComms(MainActivity activityRef, int baudRate){
+    public SerialComms(){
 
-        this.activityRef = activityRef;
-        this.baudRate = baudRate;
-        this.reading = false;
-        this.writing = false;
-        this.connected = false;
+        SerialComms.reading = false;
+        SerialComms.writing = false;
+        SerialComms.connected = false;
 
-        this.pendingProcessStreams = new ConcurrentLinkedQueue<ByteStream>();
-        this.pendingWritingStreams = new ConcurrentLinkedQueue<ByteStream>();
-        this.processedStreams = new ConcurrentLinkedQueue<ByteStream>();
-        this.sentStreams = new ConcurrentLinkedQueue<ByteStream>();
+        SerialComms.streamProcessor = ByteStreamProcessor.getInstance(serial);
+
+        SerialComms.pendingProcessStreams = new ConcurrentLinkedQueue<ByteStream>();
+        SerialComms.pendingWritingStreams = new ConcurrentLinkedQueue<ByteStream>();
+        SerialComms.processedStreams = new ConcurrentLinkedQueue<ByteStream>();
+        SerialComms.sentStreams = new ConcurrentLinkedQueue<ByteStream>();
+    }
+
+    public static synchronized SerialComms getInstance(){
+
+        if(serial == null){
+
+            serial = new SerialComms();
+        }
+
+        return serial;
     }
 
     @Override
@@ -60,59 +73,96 @@ public class SerialComms extends AppCompatActivity implements Runnable {
 
         while(!Thread.interrupted()){
 
-            if(!this.isConnected()){
+            if(!SerialComms.isConnected()){
 
-                this.appSerialConnect();
+                appSerialConnect();
 
-                this.activityRef.updateStatusText("Connected: "+ isConnected());
+                runOnUiThread(new Runnable() {
+
+                    @Override
+                    public void run() {
+
+                        SerialComms.activityRef.updateStatusText("Connected: "+ isConnected());
+                    }
+                });
+
+                SerialComms.streamProcessorThread = new Thread(SerialComms.streamProcessor);
             }
 
-            if(!isReading()){
+            if(!SerialComms.isReading() && SerialComms.isConnected()){
 
                 //if not reading, pick a queued stream and send it
-                if(this.pendingWritingStreams.size() > 0){
+                if(SerialComms.pendingWritingStreams.size() > 0){
 
-                    ByteStream currentStream = this.pendingWritingStreams.remove();
-                    this.serialWritingThread = new Thread(new SerialWriter(this, currentStream));
+                   ByteStream currentStream = SerialComms.pendingWritingStreams.poll();
+                   SerialComms.serialWritingThread = new Thread(new SerialWriter(SerialComms.getInstance(), currentStream));
 
                 }else{
 
                     //if there are no pending queued streams, poll
                     byte[] poll = new byte[1];
-                    poll[0] = this.byteUtils.intToByte(80);
+                    poll[0] = ByteHandleUtils.intToByte(80);
 
                     byte[] formattedStream = formatStream(poll, false);
 
                     ByteStream currentStream = new ByteStream(formattedStream);
-                    this.serialWritingThread = new Thread(new SerialWriter(this, currentStream));
-                    this.serialWritingThread.start();
+
+                    try {
+                        //purge buffer before writing
+                        SerialComms.purgeHwBuffers(false, true);
+                        SerialComms.serialWritingThread = new Thread(new SerialWriter(SerialComms.getInstance(), currentStream));
+                        SerialComms.serialWritingThread.start();
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
 
-                this.serialReadingThread = new Thread(new SerialReader(this, this.READ_WAIT_MILLIS));
-                this.serialReadingThread.start();
+                try {
+                    //purge buffer before reading
+                    SerialComms.purgeHwBuffers(true, false);
+                    SerialComms.reading = true;
+                    SerialComms.serialReadingThread = new Thread(new SerialReader(serial, SerialComms.READ_WAIT_MILLIS));
+                    SerialComms.serialReadingThread.start();
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
 
-    public synchronized void purgeHwBuffers(boolean read, boolean write) throws IOException {
+    public synchronized void addStreamToList(final String stream){
 
-        this.currentConnection.purgeHwBuffers(write, read);
+        runOnUiThread(new Runnable() {
+
+            @Override
+            public void run() {
+
+                SerialComms.activityRef.addStreamToHistory(stream);
+            }
+        });
+    }
+
+    public static synchronized void purgeHwBuffers(boolean read, boolean write) throws IOException {
+
+        SerialComms.currentConnection.purgeHwBuffers(write, read);
     }
 
     public synchronized void appSerialConnect(){
 
-        this.getAllDrivers();
+        //SerialComms.getAllDrivers();
 
         try {
-            boolean connected = openSerial(0, this.baudRate);
+            boolean connected = SerialComms.openSerial(0, SerialComms.baudRate);
 
             if(connected){
 
-                this.setConnected(true);
+                SerialComms.setConnected(true);
 
             }else{
 
-                this.setConnected(false);
+                SerialComms.setConnected(false);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -120,20 +170,20 @@ public class SerialComms extends AppCompatActivity implements Runnable {
     }
 
     //SERIAL HANDLER
-    private void getAllDrivers(){
+    /*private void getAllDrivers(){
 
-        this.manager = (UsbManager) getSystemService(Context.USB_SERVICE);
-        this.availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(this.manager);
-    }
+        SerialComms.manager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        SerialComms.availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(SerialComms.manager);
+    }*/
 
-    private boolean openSerial(int deviceIndex, int baudRate) throws IOException {
+    private static boolean openSerial(int deviceIndex, int baudRate) throws IOException {
 
         boolean connected = false;
 
-        if(this.availableDrivers.size() > 0){
+        if(SerialComms.availableDrivers.size() > 0){
 
-            UsbSerialDriver driver = this.availableDrivers.get(deviceIndex);
-            UsbDeviceConnection connection = this.manager.openDevice(driver.getDevice());
+            UsbSerialDriver driver = SerialComms.availableDrivers.get(deviceIndex);
+            UsbDeviceConnection connection = SerialComms.manager.openDevice(driver.getDevice());
 
             if (connection == null) {
                 // add UsbManager.requestPermission(driver.getDevice(), ..) handling here
@@ -142,42 +192,42 @@ public class SerialComms extends AppCompatActivity implements Runnable {
 
                 connected = true;
 
-                this.currentConnection = driver.getPorts().get(deviceIndex); //multiple devices here...?
-                this.currentConnection.open(connection);
-                this.currentConnection.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
+                SerialComms.currentConnection = driver.getPorts().get(deviceIndex); //multiple devices here...?
+                SerialComms.currentConnection.open(connection);
+                SerialComms.currentConnection.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
             }
         }
 
         return connected;
     }
 
-    public void serialWrite(byte[] request) throws IOException {
+    public static synchronized void serialWrite(byte[] request) throws IOException {
 
-        if(this.isConnected()) {
-            this.currentConnection.write(request, WRITE_WAIT_MILLIS);
+        if(SerialComms.isConnected()) {
+            SerialComms.currentConnection.write(request, WRITE_WAIT_MILLIS);
         }
     }
 
     //UTILS
     //formats byte stream. adds 127 as header and CRC16 MSL LSB to end
-    public byte[] formatStream(byte[] command, boolean addCRC16){
+    public static byte[] formatStream(byte[] command, boolean addCRC16){
 
         byte[] dataStream;
 
         byte[] header = new byte[1];
-        header[0] = this.byteUtils.intToByte(127);
+        header[0] = ByteHandleUtils.intToByte(127);
 
         byte[] headerCommand;
-        headerCommand = this.byteUtils.combineByteArray(header, command);
+        headerCommand = ByteHandleUtils.combineByteArray(header, command);
 
         dataStream = headerCommand;
 
         if(addCRC16){
 
-            byte[] crc16 = calculateCRC16(command);
+            byte[] crc16 = SerialComms.calculateCRC16(command);
 
             byte[] headerCommandTail;
-            headerCommandTail = this.byteUtils.combineByteArray(headerCommand, crc16);
+            headerCommandTail = ByteHandleUtils.combineByteArray(headerCommand, crc16);
 
             dataStream = headerCommandTail;
         }
@@ -189,7 +239,7 @@ public class SerialComms extends AppCompatActivity implements Runnable {
     //byte[] crc = cp.calculateCRC16(asd.getBytes());
     //Toast.makeText(MainActivity.this, Byte.toUnsignedInt(crc[6])+","+Byte.toUnsignedInt(crc[7]), Toast.LENGTH_SHORT).show();
 
-    public byte[] calculateCRC16(byte[] bytes){
+    public static byte[] calculateCRC16(byte[] bytes){
 
         byte[] CRC16Long;
         byte[] CRC16Final = new byte[2];
@@ -204,134 +254,174 @@ public class SerialComms extends AppCompatActivity implements Runnable {
         return CRC16Final;
     }
 
-    public synchronized void queueStream(ByteStream stream){
+    public static synchronized void queueStream(ByteStream stream, String type){
 
-        this.pendingProcessStreams.add(stream);
+        switch(type){
+            case "processing":
+                SerialComms.pendingProcessStreams.add(stream);
+                break;
+            case "writing":
+                SerialComms.pendingWritingStreams.add(stream);
+                break;
+            default:
+                break;
+        }
     }
-    public synchronized void saveSentStream(ByteStream stream){
+    public static synchronized void saveSentStream(ByteStream stream){
 
-        this.sentStreams.add(stream);
+        SerialComms.sentStreams.add(stream);
     }
 
     //GET+SET
-
-    public static synchronized int getWriteWaitMillis() {
-        return WRITE_WAIT_MILLIS;
+    public static SerialComms getSerial() {
+        return serial;
     }
 
-    public static synchronized int getReadWaitMillis() {
-        return READ_WAIT_MILLIS;
+    public static void setSerial(SerialComms serial) {
+        SerialComms.serial = serial;
     }
 
-    public synchronized UsbSerialPort getCurrentConnection() {
-        return currentConnection;
-    }
-
-    public void setCurrentConnection(UsbSerialPort currentConnection) {
-        this.currentConnection = currentConnection;
-    }
-
-    public List<UsbSerialDriver> getAvailableDrivers() {
-        return availableDrivers;
-    }
-
-    public void setAvailableDrivers(List<UsbSerialDriver> availableDrivers) {
-        this.availableDrivers = availableDrivers;
-    }
-
-    public UsbManager getManager() {
-        return manager;
-    }
-
-    public void setManager(UsbManager manager) {
-        this.manager = manager;
-    }
-
-    public SerialInputOutputManager getUsbIoManager() {
-        return usbIoManager;
-    }
-
-    public void setUsbIoManager(SerialInputOutputManager usbIoManager) {
-        this.usbIoManager = usbIoManager;
-    }
-
-    public ByteHandleUtils getByteUtils() {
-        return byteUtils;
-    }
-
-    public void setByteUtils(ByteHandleUtils byteUtils) {
-        this.byteUtils = byteUtils;
-    }
-
-    public synchronized boolean isConnected() {
-        return connected;
-    }
-
-    public void setConnected(boolean connected) {
-        this.connected = connected;
-    }
-
-    public MainActivity getActivityRef() {
+    public static MainActivity getActivityRef() {
         return activityRef;
     }
 
-    public void setActivityRef(MainActivity activityRef) {
-        this.activityRef = activityRef;
+    public static void setActivityRef(MainActivity activityRef) {
+        SerialComms.activityRef = activityRef;
     }
 
-    public int getBaudRate() {
+    public static int getWriteWaitMillis() {
+        return WRITE_WAIT_MILLIS;
+    }
+
+    public static int getReadWaitMillis() {
+        return READ_WAIT_MILLIS;
+    }
+
+    public static int getBaudRate() {
         return baudRate;
     }
 
-    public void setBaudRate(int baudRate) {
-        this.baudRate = baudRate;
+    public static void setBaudRate(int baudRate) {
+        SerialComms.baudRate = baudRate;
     }
 
-    public Thread getPaymentThread() {
-        return paymentThread;
+    public static UsbSerialPort getCurrentConnection() {
+        return currentConnection;
     }
 
-    public void setPaymentThread(Thread paymentThread) {
-        this.paymentThread = paymentThread;
+    public static void setCurrentConnection(UsbSerialPort currentConnection) {
+        SerialComms.currentConnection = currentConnection;
     }
 
-    public Thread getRechargeThread() {
-        return rechargeThread;
+    public static List<UsbSerialDriver> getAvailableDrivers() {
+        return availableDrivers;
     }
 
-    public void setRechargeThread(Thread rechargeThread) {
-        this.rechargeThread = rechargeThread;
+    public static void setAvailableDrivers(List<UsbSerialDriver> availableDrivers) {
+        SerialComms.availableDrivers = availableDrivers;
     }
 
-    public ConcurrentLinkedQueue getPendingProcessStreams() {
+    public static UsbManager getManager() {
+        return manager;
+    }
+
+    public static void setManager(UsbManager manager) {
+        SerialComms.manager = manager;
+    }
+
+    public static SerialInputOutputManager getUsbIoManager() {
+        return usbIoManager;
+    }
+
+    public static void setUsbIoManager(SerialInputOutputManager usbIoManager) {
+        SerialComms.usbIoManager = usbIoManager;
+    }
+
+    public static synchronized ConcurrentLinkedQueue<ByteStream> getPendingProcessStreams() {
         return pendingProcessStreams;
     }
 
-    public void setPendingProcessStreams(ConcurrentLinkedQueue pendingProcessStreams) {
-        this.pendingProcessStreams = pendingProcessStreams;
+    public static synchronized void setPendingProcessStreams(ConcurrentLinkedQueue<ByteStream> pendingProcessStreams) {
+        SerialComms.pendingProcessStreams = pendingProcessStreams;
     }
 
-    public ConcurrentLinkedQueue getPendingWritingStreams() {
+    public static synchronized ConcurrentLinkedQueue<ByteStream> getPendingWritingStreams() {
         return pendingWritingStreams;
     }
 
-    public void setPendingWritingStreams(ConcurrentLinkedQueue pendingWritingStreams) {
-        this.pendingWritingStreams = pendingWritingStreams;
+    public static synchronized void setPendingWritingStreams(ConcurrentLinkedQueue<ByteStream> pendingWritingStreams) {
+        SerialComms.pendingWritingStreams = pendingWritingStreams;
     }
 
-    public synchronized boolean isReading() {
+    public static synchronized ConcurrentLinkedQueue<ByteStream> getProcessedStreams() {
+        return processedStreams;
+    }
+
+    public static void setProcessedStreams(ConcurrentLinkedQueue<ByteStream> processedStreams) {
+        SerialComms.processedStreams = processedStreams;
+    }
+
+    public static synchronized ConcurrentLinkedQueue<ByteStream> getSentStreams() {
+        return sentStreams;
+    }
+
+    public static synchronized void setSentStreams(ConcurrentLinkedQueue<ByteStream> sentStreams) {
+        SerialComms.sentStreams = sentStreams;
+    }
+
+    public static Thread getPaymentThread() {
+        return paymentThread;
+    }
+
+    public static void setPaymentThread(Thread paymentThread) {
+        SerialComms.paymentThread = paymentThread;
+    }
+
+    public static Thread getRechargeThread() {
+        return rechargeThread;
+    }
+
+    public static void setRechargeThread(Thread rechargeThread) {
+        SerialComms.rechargeThread = rechargeThread;
+    }
+
+    public static Thread getSerialReadingThread() {
+        return serialReadingThread;
+    }
+
+    public static void setSerialReadingThread(Thread serialReadingThread) {
+        SerialComms.serialReadingThread = serialReadingThread;
+    }
+
+    public static Thread getSerialWritingThread() {
+        return serialWritingThread;
+    }
+
+    public static void setSerialWritingThread(Thread serialWritingThread) {
+        SerialComms.serialWritingThread = serialWritingThread;
+    }
+
+    public static boolean isConnected() {
+        return connected;
+    }
+
+    public static void setConnected(boolean connected) {
+        SerialComms.connected = connected;
+    }
+
+    public static synchronized boolean isReading() {
         return reading;
     }
 
-    public synchronized void setReading(boolean reading) {
-        this.reading = reading;
+    public static synchronized void setReading(boolean reading) {
+        SerialComms.reading = reading;
     }
 
-    public synchronized boolean isWriting() {
+    public static boolean isWriting() {
         return writing;
     }
 
-    public synchronized void setWriting(boolean writing) {
-        this.writing = writing;
+    public static void setWriting(boolean writing) {
+        SerialComms.writing = writing;
     }
 }
