@@ -45,23 +45,25 @@ public class ByteStreamProcessor implements Runnable {
     @Override
     public void run(){
 
+        Log.v("run", "thread started");
+
         while(!Thread.interrupted()){
 
             int pendingProcessSize = 0;
 
-            synchronized (serialComms){
+            synchronized (SerialComms.getInstance()){
 
-                pendingProcessSize = serialComms.getPendingProcessStreams().size();
+                pendingProcessSize = SerialComms.getPendingProcessStreams().size();
             }
 
             if(pendingProcessSize > 0){
 
-                Log.d("run", "pendingProcessSize > 0");
+                Log.v("run", "post pendingProcessSize > 0");
 
                 ByteStream currentByteStream = new ByteStream(new byte[1]);
 
-                synchronized (serialComms){
-                    currentByteStream = serialComms.getPendingProcessStreams().poll();
+                synchronized (SerialComms.getInstance()){
+                    currentByteStream = SerialComms.getPendingProcessStreams().poll();
                 }
 
                 byte[] currentStream = currentByteStream.getStream();
@@ -129,7 +131,7 @@ public class ByteStreamProcessor implements Runnable {
                                             saldoStream[1] = ByteHandleUtils.intToByte(2);
                                             saldoStream[2] = ByteHandleUtils.intToByte(83);
 
-                                            serialComms.queueStream(new ByteStream(serialComms.formatStream(saldoStream, true)), "writing");
+                                            SerialComms.queueStream(new ByteStream(SerialComms.formatStream(saldoStream, true)), "writing");
 
                                             ByteStreamProcessor.deviceStatuses[1] = 2;
 
@@ -225,9 +227,9 @@ public class ByteStreamProcessor implements Runnable {
                                                                 chargeStream[index+6] = uid[index];
                                                             }
 
-                                                            byte[] finalStream = serialComms.formatStream(chargeStream, true);
+                                                            byte[] finalStream = SerialComms.formatStream(chargeStream, true);
 
-                                                            serialComms.queueStream(new ByteStream(finalStream), "writing");
+                                                            SerialComms.queueStream(new ByteStream(finalStream), "writing");
 
                                                             ByteStreamProcessor.deviceStatuses[1] = 3;
 
