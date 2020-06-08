@@ -18,14 +18,15 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.stream.Stream;
 
 public class SerialComms extends AppCompatActivity implements Runnable {
 
     private static SerialComms serial;
     private static ByteStreamProcessor streamProcessor;
     private static MainActivity activityRef;
-    private static final int WRITE_WAIT_MILLIS = 1000;
-    private static final int READ_WAIT_MILLIS = 1000;
+    private static final int WRITE_WAIT_MILLIS = 250;
+    private static final int READ_WAIT_MILLIS = 250;
     private static int baudRate = 57600;
     private static UsbSerialPort currentConnection;
     private static List<UsbSerialDriver> availableDrivers;
@@ -43,6 +44,8 @@ public class SerialComms extends AppCompatActivity implements Runnable {
     private static boolean connected;
     private static boolean reading;
     private static boolean writing;
+    private static long lastReadTS;
+    private static long lastWriteTS;
 
     public SerialComms(){
 
@@ -86,48 +89,80 @@ public class SerialComms extends AppCompatActivity implements Runnable {
                     }
                 });
 
-                SerialComms.streamProcessorThread = new Thread(SerialComms.streamProcessor);
+                SerialComms.streamProcessorThread = new Thread(ByteStreamProcessor.getInstance(getInstance()));
                 SerialComms.streamProcessorThread.start();
             }
 
-            if(!SerialComms.isReading() && SerialComms.isConnected()){
+            synchronized (getInstance()){
+                if(!SerialComms.isReading() && SerialComms.isConnected()){
 
-                //if not reading, pick a queued stream and send it
-                if(SerialComms.pendingWritingStreams.size() > 0){
+                    //if not reading or writing, pick a queued stream and send it
+                    if(SerialComms.pendingWritingStreams.size() > 0  && !isWriting()){
 
-                   ByteStream currentStream = SerialComms.pendingWritingStreams.poll();
-                   SerialComms.serialWritingThread = new Thread(new SerialWriter(SerialComms.getInstance(), currentStream));
+                        try {
 
-                }else{
+                            if(isWritingAvailable()){
 
-                    //if there are no pending queued streams, poll
-                    byte[] poll = new byte[1];
-                    poll[0] = ByteHandleUtils.intToByte(80);
+                                SerialComms.setWriting(true);
 
-                    byte[] formattedStream = formatStream(poll, false);
+                                ByteStream currentStream = SerialComms.pendingWritingStreams.poll();
+                                Log.v("Serialcomms", "just polled pending writing: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(currentStream.getStream())));
 
-                    ByteStream currentStream = new ByteStream(formattedStream);
+                                //purge buffer before writing
+                                SerialComms.purgeHwBuffers(false, true);
+                                SerialComms.serialWritingThread = new Thread(new SerialWriter(SerialComms.getInstance(), currentStream));
+                                this.lastWriteTS = System.currentTimeMillis();
+                            }
+
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            SerialComms.setWriting(false);
+                        }
+
+                    }else if(!isWriting()){
+
+                        try {
+
+                            if(isWritingAvailable()){
+
+                                SerialComms.setWriting(true);
+
+                                //if there are no pending queued streams and is not writing, poll
+                                byte[] poll = new byte[1];
+                                poll[0] = ByteHandleUtils.intToByte(80);
+
+                                byte[] formattedStream = formatStream(poll, false);
+
+                                ByteStream currentStream = new ByteStream(formattedStream);
+
+                                //purge buffer before writing
+                                SerialComms.purgeHwBuffers(false, true);
+                                SerialComms.serialWritingThread = new Thread(new SerialWriter(SerialComms.getInstance(), currentStream));
+                                SerialComms.serialWritingThread.start();
+                                this.lastWriteTS = System.currentTimeMillis();
+                            }
+
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            SerialComms.setWriting(false);
+                        }
+                    }
 
                     try {
-                        //purge buffer before writing
-                        SerialComms.purgeHwBuffers(false, true);
-                        SerialComms.serialWritingThread = new Thread(new SerialWriter(SerialComms.getInstance(), currentStream));
-                        SerialComms.serialWritingThread.start();
+
+                        //purge buffer before reading
+                        if(isReadingAvailable()){
+
+                            SerialComms.purgeHwBuffers(true, false);
+                            SerialComms.serialReadingThread = new Thread(new SerialReader(serial, SerialComms.READ_WAIT_MILLIS));
+                            SerialComms.serialReadingThread.start();
+                            this.lastReadTS = System.currentTimeMillis();
+                        }
 
                     } catch (IOException e) {
                         e.printStackTrace();
+                        SerialComms.setReading(false);
                     }
-                }
-
-                try {
-                    //purge buffer before reading
-                    SerialComms.purgeHwBuffers(true, false);
-                    SerialComms.reading = true;
-                    SerialComms.serialReadingThread = new Thread(new SerialReader(serial, SerialComms.READ_WAIT_MILLIS));
-                    SerialComms.serialReadingThread.start();
-
-                } catch (IOException e) {
-                    e.printStackTrace();
                 }
             }
         }
@@ -259,9 +294,11 @@ public class SerialComms extends AppCompatActivity implements Runnable {
 
         switch(type){
             case "processing":
+                Log.v("SerialComms", "about to queue processing: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(stream.getStream())));
                 SerialComms.pendingProcessStreams.add(stream);
                 break;
             case "writing":
+                Log.v("SerialComms", "about to queue writing: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(stream.getStream())));
                 SerialComms.pendingWritingStreams.add(stream);
                 break;
             default:
@@ -416,13 +453,49 @@ public class SerialComms extends AppCompatActivity implements Runnable {
 
     public static synchronized void setReading(boolean reading) {
         SerialComms.reading = reading;
+
+       activityRef.runOnUiThread(new Runnable() {
+
+            @Override
+            public void run() {
+
+                SerialComms.activityRef.setReadingStatus(SerialComms.isReading()+"");
+            }
+        });
     }
 
-    public static boolean isWriting() {
+    public synchronized static boolean isWriting() {
         return writing;
     }
 
-    public static void setWriting(boolean writing) {
+    public static synchronized void setWriting(boolean writing) {
         SerialComms.writing = writing;
+
+
+        activityRef.runOnUiThread(new Runnable() {
+
+            @Override
+            public void run() {
+
+                SerialComms.activityRef.setWritingStatus(SerialComms.isWriting()+"");
+            }
+        });
+    }
+
+    public boolean isWritingAvailable(){
+
+        boolean available = System.currentTimeMillis() - this.lastWriteTS >= this.WRITE_WAIT_MILLIS;
+
+
+
+        return available;
+    }
+
+    public boolean isReadingAvailable(){
+
+        boolean available = System.currentTimeMillis() - this.lastReadTS >= this.READ_WAIT_MILLIS;;
+
+        return available;
+
     }
 }

@@ -25,6 +25,7 @@ public class MainActivity extends AppCompatActivity {
     private static Thread serialCommsThread;
     private BroadcastReceiver usbAttachReceiver;
     private BroadcastReceiver usbDetachReceiver;
+    private BroadcastReceiver permissionReceiver;
     private ArrayList<String> streamHistory;
     private ArrayAdapter<String> streamHistoryAdapter;
 
@@ -46,12 +47,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onReceive(Context context, Intent intent) {
 
-                synchronized (serialComms){
+                /*synchronized (serialComms){
                     serialComms.setConnected(false);
                 }
 
                 serialCommsThread = new Thread(serialComms);
-                serialCommsThread.start();
+                serialCommsThread.start();*/
             }
         };
 
@@ -59,8 +60,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onReceive(Context context, Intent intent) {
 
-                serialCommsThread.interrupt();
-                serialCommsThread = new Thread();
+                /*serialCommsThread.interrupt();
+                serialCommsThread = new Thread();*/
             }
         };
 
@@ -188,5 +189,17 @@ public class MainActivity extends AppCompatActivity {
 
     public void setStreamHistoryAdapter(ArrayAdapter<String> streamHistoryAdapter) {
         this.streamHistoryAdapter = streamHistoryAdapter;
+    }
+
+    public synchronized void setWritingStatus(String status){
+
+        TextView connectedStatus = (TextView) findViewById(R.id.writingStatus);
+        connectedStatus.setText("Writing: " + status);
+    }
+
+    public synchronized void setReadingStatus(String status){
+
+        TextView connectedStatus = (TextView) findViewById(R.id.readingStatus);
+        connectedStatus.setText("Reading: " + status);
     }
 }

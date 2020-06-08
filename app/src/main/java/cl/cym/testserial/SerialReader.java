@@ -26,17 +26,40 @@ public class SerialReader implements Runnable {
     public void run(){
 
         boolean isReading = true;
-        SerialComms.setReading(isReading);
+        synchronized (SerialComms.getInstance()){
+
+            SerialComms.setReading(true);
+        }
 
         long readingStartTS = System.currentTimeMillis();
         this.noReadLoopCount = 0;
 
-        while(isReading){
+        //while(isReading){
 
             try {
-                int len = this.serialComms.getCurrentConnection().read(this.readBuffer, SerialComms.getReadWaitMillis());
 
-                byte[] readFragment;
+                int len = 0;
+
+                synchronized (SerialComms.getInstance()){
+                    len = SerialComms.getCurrentConnection().read(this.readBuffer, 0);
+                }
+
+                if(len > 0){
+
+                    this.finalRead = new byte[len];
+
+                    for(int index = 0; index < len; index++){
+
+                        this.finalRead[index] = this.readBuffer[index];
+                    }
+                }
+
+                synchronized (SerialComms.getInstance()){
+                    SerialComms.queueStream(new ByteStream(this.finalRead), "processing");
+                    SerialComms.setReading(false);
+                }
+
+               /*byte[] readFragment;
 
                 if(len > 0){
 
@@ -80,38 +103,46 @@ public class SerialReader implements Runnable {
 
                     isReading = false;
 
-                    synchronized (serialComms){
+                    if(this.finalRead.length > 3){
 
-                        serialComms.setReading(isReading);
-                    }
+                        synchronized (SerialComms.getInstance()){
 
-                    /*remove 189 last byte
-                    if(ByteHandleUtils.byteToInt(this.finalRead[this.finalRead.length-1]) == 189){
-
-                        byte[] tempStream = new byte[this.finalRead.length-1];
-
-                        for(int index = 0; index < tempStream.length; index++){
-
-                            tempStream[index] = this.finalRead[index];
+                            SerialComms.queueStream(new ByteStream(this.finalRead), "processing");
+                            SerialComms.setReading(false);
                         }
 
-                        this.finalRead = tempStream;
-                    }*/
+                    }else{
 
-                    synchronized (serialComms){
-                        SerialComms.queueStream(new ByteStream(this.finalRead), "processing");
+                        boolean defaultValues = true;
+
+                        for(int index = 0; index < this.finalRead.length; index++){
+
+                            if(this.finalRead[index] != 127){
+
+                                defaultValues = false;
+                            }
+                        }
+
+                        if(!defaultValues){
+
+                            synchronized (SerialComms.getInstance()){
+
+                                SerialComms.queueStream(new ByteStream(this.finalRead), "processing");
+                                SerialComms.setReading(isReading);
+                            }
+                        }
                     }
 
-
-                    //this.getSerialComms().addStreamToList(ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(this.finalRead)));
-                }
+                }*/
 
             } catch (IOException e) {
                 e.printStackTrace();
                 isReading = false;
-                SerialComms.setReading(isReading);
+                synchronized (SerialComms.getInstance()){
+                    SerialComms.setReading(false);
+                }
             }
-        }
+        //}
     }
 
     public byte[] getReadBuffer() {

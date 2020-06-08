@@ -11,52 +11,31 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="29dp"
-        android:layout_marginTop="75dp"
+        android:layout_marginTop="6dp"
         android:text="TextView"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/readingStatus"
         tools:text="Init..." />
 
     <ListView
         android:id="@+id/list_streamHistory"
-        android:layout_width="320dp"
-        android:layout_height="0dp"
-        android:layout_marginBottom="16dp"
+        android:layout_width="0dp"
+        android:layout_height="261dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="15dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/btn_sent" />
+        app:layout_constraintStart_toStartOf="parent" />
 
     <Button
         android:id="@+id/btn_start"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="94dp"
-        android:layout_marginBottom="222dp"
+        android:layout_marginTop="7dp"
         android:text="Connect"
-        app:layout_constraintBottom_toTopOf="@+id/list_streamHistory"
         app:layout_constraintStart_toStartOf="@+id/text_status"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <Button
-        android:id="@+id/btn_sent"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="149dp"
-        android:layout_marginBottom="167dp"
-        android:text="Sent"
-        app:layout_constraintBottom_toTopOf="@+id/list_streamHistory"
-        app:layout_constraintEnd_toEndOf="@+id/btn_start"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <Button
-        android:id="@+id/btn_process"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="6dp"
-        android:text="Process"
-        app:layout_constraintBaseline_toBaselineOf="@+id/btn_sent"
-        app:layout_constraintStart_toEndOf="@+id/btn_sent" />
+        app:layout_constraintTop_toBottomOf="@+id/text_status" />
 
     <Button
         android:id="@+id/btn_writing"
@@ -66,5 +45,43 @@
         android:text="Writing"
         app:layout_constraintBaseline_toBaselineOf="@+id/btn_process"
         app:layout_constraintStart_toEndOf="@+id/btn_process" />
+
+    <Button
+        android:id="@+id/btn_process"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:layout_marginTop="7dp"
+        android:text="Process"
+        app:layout_constraintStart_toEndOf="@+id/btn_sent"
+        app:layout_constraintTop_toBottomOf="@+id/btn_start" />
+
+    <Button
+        android:id="@+id/btn_sent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Sent"
+        app:layout_constraintBaseline_toBaselineOf="@+id/btn_process"
+        app:layout_constraintEnd_toEndOf="@+id/btn_start" />
+
+    <TextView
+        android:id="@+id/writingStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="17dp"
+        android:text="TextView"
+        app:layout_constraintBaseline_toBaselineOf="@+id/readingStatus"
+        app:layout_constraintStart_toEndOf="@+id/readingStatus" />
+
+    <TextView
+        android:id="@+id/readingStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="29dp"
+        android:layout_marginTop="50dp"
+        android:text="TextView"
+        app:layout_constraintEnd_toEndOf="@+id/text_status"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

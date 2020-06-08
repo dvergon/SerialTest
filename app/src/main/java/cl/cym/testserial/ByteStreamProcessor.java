@@ -45,8 +45,6 @@ public class ByteStreamProcessor implements Runnable {
     @Override
     public void run(){
 
-        Log.v("run", "thread started");
-
         while(!Thread.interrupted()){
 
             int pendingProcessSize = 0;
@@ -57,8 +55,6 @@ public class ByteStreamProcessor implements Runnable {
             }
 
             if(pendingProcessSize > 0){
-
-                Log.v("run", "post pendingProcessSize > 0");
 
                 ByteStream currentByteStream = new ByteStream(new byte[1]);
 
@@ -74,208 +70,221 @@ public class ByteStreamProcessor implements Runnable {
                 //check for first byte to be 127
                 if(ByteHandleUtils.byteToInt(currentStream[0]) == 127){
 
-                    //check command byte
-                    switch(ByteHandleUtils.byteToInt(currentStream[0])){
+                    streamContent = getStreamContent(currentStream);
 
-                        case 83:
-                            //POLL RESPONSE
-                            //EXPECTS 127 83 DN S1 S2 S3...SN MSB LSB
-                            //N = number of devices
-                            //SN = Status of device number N
-                            //MSB = Most significant byte of CRC16
-                            //LSB = Least significant byte of CRC16
+                    //Log.v("streamProc", "streamLength: "+streamContent.length);
 
-                            //get stream content and CRC of it
-                            streamContent = getStreamContent(currentStream);
-                            contentCRC = ByteHandleUtils.calculateCRC16(streamContent);
-                            validCRC = true; //(currentStream[currentStream.length-2] == contentCRC[0]) && (currentStream[currentStream.length-1] == contentCRC[1]);
+                    if(streamContent.length > 0){
 
-                            //if valid CRC, process data
-                            if(validCRC){
+                        //Log.v("streamProc", "stream 1st byte: "+streamContent[0]);
 
-                                //3 switches with the logic for each stream type for each device (currently 3)
-                                //First check for the NFCs status
-                                //Streams will be processed in this order
-                                //NFC Payment -> NFC Recharge -> Bill
+                        //check command byte
+                        switch(ByteHandleUtils.byteToInt(streamContent[0])){
 
-                                //checks if payment NFC has activity
+                            case 83:
+                                //POLL RESPONSE
+                                //EXPECTS 127 83 DN S1 S2 S3...SN MSB LSB
+                                //N = number of devices
+                                //SN = Status of device number N
+                                //MSB = Most significant byte of CRC16
+                                //LSB = Least significant byte of CRC16
 
-                                //D2: NFC Payment
-                                //Possible status
-                                //1: waiting (NFC card/client not detected)
-                                //11...19: NFC card/client detected
-                                //  1: TNE Basica
-                                //  2: TNE Media
-                                //  3: TNE Superior
-                                //  4: Prepago general
-                                //  5: Adulto mayor
+                                //get stream content and CRC of it
+                                streamContent = getStreamContent(currentStream);
+                                contentCRC = ByteHandleUtils.calculateCRC16(streamContent);
+                                validCRC = true; //(currentStream[currentStream.length-2] == contentCRC[0]) && (currentStream[currentStream.length-1] == contentCRC[1]);
 
-                                if(ByteHandleUtils.byteToInt(streamContent[3]) > 1){
+                                //if valid CRC, process data
+                                if(validCRC){
 
-                                    //change to reading card if idle
-                                    if(ByteStreamProcessor.deviceStatuses[1] == 0){
+                                    //3 switches with the logic for each stream type for each device (currently 3)
+                                    //First check for the NFCs status
+                                    //Streams will be processed in this order
+                                    //NFC Payment -> NFC Recharge -> Bill
 
-                                        ByteStreamProcessor.deviceStatuses[1] = 1;
+                                    //checks if payment NFC has activity
+
+                                    //D2: NFC Payment
+                                    //Possible status
+                                    //1: waiting (NFC card/client not detected)
+                                    //11...19: NFC card/client detected
+                                    //  1: TNE Basica
+                                    //  2: TNE Media
+                                    //  3: TNE Superior
+                                    //  4: Prepago general
+                                    //  5: Adulto mayor
+
+                                    if(ByteHandleUtils.byteToInt(streamContent[3]) > 1){
+
+                                        //change to reading card if idle
+                                        if(ByteStreamProcessor.deviceStatuses[1] == 0){
+
+                                            ByteStreamProcessor.deviceStatuses[1] = 1;
+                                        }
+
+                                        switch(ByteStreamProcessor.deviceStatuses[1]){
+                                            case 0:
+                                                //idle
+                                                break;
+                                            case 1:
+                                                Log.v("streamProc", "case 1: card read requesting balance");
+                                                //card detected
+                                                //if card detected, get balance
+                                                //127 67 DN 83 MSB LSB
+                                                byte[] saldoStream = new byte[3];
+                                                saldoStream[0] = ByteHandleUtils.intToByte(67);
+                                                saldoStream[1] = ByteHandleUtils.intToByte(2);
+                                                saldoStream[2] = ByteHandleUtils.intToByte(83);
+
+                                                synchronized (SerialComms.getInstance()){
+
+                                                    SerialComms.queueStream(new ByteStream(SerialComms.formatStream(saldoStream, true)), "writing");
+                                                }
+
+                                                ByteStreamProcessor.deviceStatuses[1] = 2;
+
+                                                break;
+                                            case 2:
+                                                //balance request waiting for D2 response
+                                                break;
+                                            case 3:
+                                                //charge sent
+                                                break;
+                                            case 4:
+                                                //balance post charge
+                                                break;
+                                        }
+                                    }else{
+
+                                        ByteStreamProcessor.deviceStatuses[1] = 0;
                                     }
 
-                                    switch(ByteStreamProcessor.deviceStatuses[1]){
-                                        case 0:
-                                            //idle
-                                            break;
+                                    //D1: Bill acceptor
+                                    //Possible status
+                                    //100: ready
+                                    //101: busy
+                                    //1...16: bill waiting to be accepted/rejected
+                                    //  1 = $1.000
+                                    //  2 = $2.000
+                                    //  3 = $5.000
+                                    //  4 = $10.000
+
+                                }
+
+                                break;
+
+                            case 82:
+                                //response to command
+                                streamContent = getStreamContent(currentStream);
+                                contentCRC = ByteHandleUtils.calculateCRC16(streamContent);
+                                validCRC = true; //(currentStream[currentStream.length-2] == contentCRC[0]) && (currentStream[currentStream.length-1] == contentCRC[1]);
+
+                                //if CRC valid process data
+                                if(validCRC){
+                                    //first check DN
+                                    switch(ByteHandleUtils.byteToInt(streamContent[1])){
+
                                         case 1:
-                                            //card detected
-                                            //if card detected, get balance
-                                            //127 67 DN 83 MSB LSB
-                                            byte[] saldoStream = new byte[3];
-                                            saldoStream[0] = ByteHandleUtils.intToByte(67);
-                                            saldoStream[1] = ByteHandleUtils.intToByte(2);
-                                            saldoStream[2] = ByteHandleUtils.intToByte(83);
-
-                                            SerialComms.queueStream(new ByteStream(SerialComms.formatStream(saldoStream, true)), "writing");
-
-                                            ByteStreamProcessor.deviceStatuses[1] = 2;
+                                            //bill
 
                                             break;
                                         case 2:
-                                            //balance request waiting for D2 response
-                                            break;
-                                        case 3:
-                                            //charge sent
-                                            break;
-                                        case 4:
-                                            //balance post charge
-                                            break;
-                                    }
-                                }else{
+                                            //nfc pay
+                                            //currently there are two possible statuses
+                                            //Err: 127 82 2 69 ET SMB LSB
+                                            //Balance: 127 82 2 83 B1 B2 B3 CT UID1...UID7 SMB LSB
 
-                                    ByteStreamProcessor.deviceStatuses[1] = 0;
-                                }
+                                            switch(ByteHandleUtils.byteToInt(streamContent[2])){
 
-                                //D1: Bill acceptor
-                                //Possible status
-                                //100: ready
-                                //101: busy
-                                //1...16: bill waiting to be accepted/rejected
-                                //  1 = $1.000
-                                //  2 = $2.000
-                                //  3 = $5.000
-                                //  4 = $10.000
+                                                case 83:
+                                                    //balance
+                                                    byte[] balance = new byte[3];
+                                                    byte[] uid = new byte[7];
+                                                    //0 to 8 prices array
+                                                    int cardType = ByteHandleUtils.byteToInt(streamContent[6])-11;
 
-                            }
+                                                    balance = ByteHandleUtils.getBytesFromByteArray(streamContent, 3, 3);
+                                                    uid = ByteHandleUtils.getBytesFromByteArray(streamContent, 7, 7);
 
-                            break;
+                                                    switch(ByteStreamProcessor.deviceStatuses[1]){
+                                                        case 2:
+                                                            //if status is 2, we send charge stream
+                                                            //127 67 2 80 C1 C2 C3 UID1...UID7 MSB LSB
+                                                            byte[] chargeStream = new byte[13];
 
-                        case 82:
-                            //response to command
-                            streamContent = getStreamContent(currentStream);
-                            contentCRC = ByteHandleUtils.calculateCRC16(streamContent);
-                            validCRC = true; //(currentStream[currentStream.length-2] == contentCRC[0]) && (currentStream[currentStream.length-1] == contentCRC[1]);
+                                                            chargeStream[0] = ByteHandleUtils.intToByte(67);
+                                                            chargeStream[1] = ByteHandleUtils.intToByte(2);
+                                                            chargeStream[3] = ByteHandleUtils.intToByte(80);
 
-                            //if CRC valid process data
-                            if(validCRC){
-                                //first check DN
-                                switch(ByteHandleUtils.byteToInt(streamContent[1])){
+                                                            int integerBalance = ByteHandleUtils.threeByteArrayToInteger(balance);
 
-                                    case 1:
-                                        //bill
+                                                            //check if balance is enough
+                                                            if(integerBalance - ByteStreamProcessor.prices[cardType] >= 0){
 
-                                        break;
-                                    case 2:
-                                        //nfc pay
-                                        //currently there are two possible statuses
-                                        //Err: 127 82 2 69 ET SMB LSB
-                                        //Balance: 127 82 2 83 B1 B2 B3 CT UID1...UID7 SMB LSB
+                                                                byte[] priceByteArray = ByteHandleUtils.intToByteArray(ByteStreamProcessor.prices[cardType],3);
 
-                                        switch(ByteHandleUtils.byteToInt(streamContent[2])){
+                                                                //add price
+                                                                for(int index = 0; index < priceByteArray.length; index++){
 
-                                            case 83:
-                                                //balance
-                                                byte[] balance = new byte[3];
-                                                byte[] uid = new byte[7];
-                                                //0 to 8 prices array
-                                                int cardType = ByteHandleUtils.byteToInt(streamContent[6])-11;
+                                                                    chargeStream[index+4] = priceByteArray[index];
+                                                                }
 
-                                                balance = ByteHandleUtils.getBytesFromByteArray(streamContent, 3, 3);
-                                                uid = ByteHandleUtils.getBytesFromByteArray(streamContent, 7, 7);
+                                                                //add UID
+                                                                for(int index = 0; index < uid.length; index++){
 
-                                                switch(ByteStreamProcessor.deviceStatuses[1]){
-                                                    case 2:
-                                                        //if status is 2, we send charge stream
-                                                        //127 67 2 80 C1 C2 C3 UID1...UID7 MSB LSB
-                                                        byte[] chargeStream = new byte[13];
+                                                                    chargeStream[index+6] = uid[index];
+                                                                }
 
-                                                        chargeStream[0] = ByteHandleUtils.intToByte(67);
-                                                        chargeStream[1] = ByteHandleUtils.intToByte(2);
-                                                        chargeStream[3] = ByteHandleUtils.intToByte(80);
+                                                                byte[] finalStream = SerialComms.formatStream(chargeStream, true);
 
-                                                        int integerBalance = ByteHandleUtils.threeByteArrayToInteger(balance);
+                                                                SerialComms.queueStream(new ByteStream(finalStream), "writing");
 
-                                                        //check if balance is enough
-                                                        if(integerBalance - ByteStreamProcessor.prices[cardType] >= 0){
+                                                                ByteStreamProcessor.deviceStatuses[1] = 3;
 
-                                                            byte[] priceByteArray = ByteHandleUtils.intToByteArray(ByteStreamProcessor.prices[cardType],3);
+                                                            }else{
+                                                                //NOT ENOUGH BALANCE
+                                                                //make change on UI
 
-                                                            //add price
-                                                            for(int index = 0; index < priceByteArray.length; index++){
-
-                                                                chargeStream[index+4] = priceByteArray[index];
+                                                                ByteStreamProcessor.deviceStatuses[1] = 0;
                                                             }
+                                                            break;
 
-                                                            //add UID
-                                                            for(int index = 0; index < uid.length; index++){
-
-                                                                chargeStream[index+6] = uid[index];
-                                                            }
-
-                                                            byte[] finalStream = SerialComms.formatStream(chargeStream, true);
-
-                                                            SerialComms.queueStream(new ByteStream(finalStream), "writing");
-
-                                                            ByteStreamProcessor.deviceStatuses[1] = 3;
-
-                                                        }else{
-                                                            //NOT ENOUGH BALANCE
-                                                            //make change on UI
+                                                        case 3:
+                                                            //awaiting saldo after charge stream
 
                                                             ByteStreamProcessor.deviceStatuses[1] = 0;
-                                                        }
-                                                        break;
+                                                            break;
 
-                                                    case 3:
-                                                        //awaiting saldo after charge stream
+                                                        default:
+                                                            break;
+                                                    }
 
-                                                        ByteStreamProcessor.deviceStatuses[1] = 0;
-                                                        break;
+                                                    break;
 
-                                                    default:
-                                                        break;
-                                                }
+                                                case 69:
+                                                    //err
+                                                    break;
 
-                                                break;
+                                                default:
+                                                    break;
+                                            }
 
-                                            case 69:
-                                                //err
-                                                break;
+                                            break;
+                                        case 3:
+                                            //nfc recharge
+                                            break;
 
-                                            default:
-                                                break;
-                                        }
+                                        default:
+                                            break;
+                                    }
 
-                                        break;
-                                    case 3:
-                                        //nfc recharge
-                                        break;
-
-                                    default:
-                                        break;
                                 }
 
-                            }
+                                break;
 
-                            break;
-
-                        default:
-                            break;
+                            default:
+                                break;
+                        }
                     }
 
                 }else{

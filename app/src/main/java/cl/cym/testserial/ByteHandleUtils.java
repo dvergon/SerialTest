@@ -1,5 +1,7 @@
 package cl.cym.testserial;
 
+import android.util.Log;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -69,20 +71,29 @@ public class ByteHandleUtils {
 
     public static byte intToByte(int byteIntValue){
 
-        //integer to hexstring
-        String hex = Integer.toHexString(byteIntValue);
+        byte b;
 
-        //hexstring to byte
-        byte[] val = new byte[hex.length() / 2];
+        if(byteIntValue > 9){
 
-        for (int i = 0; i < val.length; i++) {
-            int index = i * 2;
-            int j = Integer.parseInt(hex.substring(index, index + 2), 16);
-            val[i] = (byte) j;
+            //integer to hexstring
+            String hex = Integer.toHexString(byteIntValue);
+
+            //hexstring to byte
+            byte[] val = new byte[hex.length() / 2];
+
+            for (int i = 0; i < val.length; i++) {
+                int index = i * 2;
+                int j = Integer.parseInt(hex.substring(index, index + 2), 16);
+                val[i] = (byte) j;
+            }
+
+            //should never go over 255 (1 byte)
+            b = val[0];
+
+        }else{
+
+            b = (byte) byteIntValue;
         }
-
-        //should never go over 255 (1 byte)
-        byte b = val[0];
 
         return b;
     }
