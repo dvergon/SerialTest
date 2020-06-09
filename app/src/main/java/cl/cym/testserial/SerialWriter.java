@@ -9,34 +9,48 @@ public class SerialWriter implements Runnable {
     private SerialComms serialComms;
     private ByteStream byteStream;
 
-    public SerialWriter(SerialComms serialComms, ByteStream byteStream){
+    public SerialWriter(SerialComms serialComms, ByteStream byteStream) {
 
         this.serialComms = serialComms;
         this.byteStream = byteStream;
     }
 
     @Override
-    public void run(){
+    public void run() {
+        synchronized (SerialComms.getInstance()) {
+            try {
 
-        try {
-            synchronized (SerialComms.getInstance()){
+                Log.v("SerialWriter", "about to send: " + ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(this.byteStream.getStream())));
 
-                Log.v("SerialWriter", "about to send: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(this.byteStream.getStream())));
+                switch (this.byteStream.getType()){
+                    case "poll":
+                        SerialComms.serialWrite(this.byteStream.getStream());
 
-                SerialComms.serialWrite(this.byteStream.getStream());
+                        SerialComms.saveSentStream(this.byteStream);
 
-                SerialComms.saveSentStream(this.byteStream);
+                        SerialComms.setWriting(false);
+                        break;
 
-                SerialComms.setWriting(false);
-            }
+                    case "command":
 
+                        SerialComms.serialWrite(this.byteStream.getStream());
 
-        } catch (IOException e) {
-            e.printStackTrace();
+                        SerialComms.saveSentStream(this.byteStream);
 
-            synchronized (SerialComms.getInstance()){
+                        SerialComms.setWriting(false);
 
-                SerialComms.setWriting(false);
+                        SerialComms.setLastCommandWriteTS(System.currentTimeMillis());
+
+                        SerialComms.setWaitingCommandResponse(true);
+
+                        break;
+
+                    default:
+                        break;
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }

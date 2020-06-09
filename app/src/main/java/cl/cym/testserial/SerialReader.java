@@ -1,5 +1,7 @@
 package cl.cym.testserial;
 
+import android.util.Log;
+
 import java.io.IOException;
 
 public class SerialReader implements Runnable {
@@ -26,10 +28,10 @@ public class SerialReader implements Runnable {
     public void run(){
 
         boolean isReading = true;
-        synchronized (SerialComms.getInstance()){
+        /*synchronized (SerialComms.getInstance()){
 
             SerialComms.setReading(true);
-        }
+        }*/
 
         long readingStartTS = System.currentTimeMillis();
         this.noReadLoopCount = 0;
@@ -52,11 +54,18 @@ public class SerialReader implements Runnable {
 
                         this.finalRead[index] = this.readBuffer[index];
                     }
-                }
 
-                synchronized (SerialComms.getInstance()){
-                    SerialComms.queueStream(new ByteStream(this.finalRead), "processing");
-                    SerialComms.setReading(false);
+                    synchronized (SerialComms.getInstance()){
+                        Log.v("SerialReader", "about the queue: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(this.finalRead)));
+                        SerialComms.queueStream(new ByteStream(this.finalRead, "read"), "processing");
+                        SerialComms.setReading(false);
+                    }
+
+                }else{
+
+                    synchronized (SerialComms.getInstance()){
+                        SerialComms.setReading(false);
+                    }
                 }
 
                /*byte[] readFragment;

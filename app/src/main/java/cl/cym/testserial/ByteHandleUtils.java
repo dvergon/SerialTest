@@ -123,6 +123,8 @@ public class ByteHandleUtils {
 
         byte[] result = new byte[qty];
 
+
+
         for(int index = 0; index < result.length; index++){
 
             result[index] = byteArray[startIndex+index];
@@ -139,7 +141,6 @@ public class ByteHandleUtils {
         long crc = CRCUtils.calculateCRC(CRCUtils.Parameters.XMODEM, bytes);
 
         CRC16Long = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putLong(crc).array();
-        //Toast.makeText(getApplicationContext(), intArrayToString(byteArrayToUnsignedIntArray(CRC16Long)) ,Toast.LENGTH_SHORT).show();
         CRC16Final[0] ^= CRC16Long[6] & 0xff;
         CRC16Final[1] ^= CRC16Long[7] & 0xff;
 

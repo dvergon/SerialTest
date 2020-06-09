@@ -41,6 +41,7 @@ public class MainActivity extends AppCompatActivity {
             this.serialComms.setBaudRate(57600);
             this.serialComms.setManager((UsbManager) getSystemService(Context.USB_SERVICE));
             this.serialComms.setAvailableDrivers(UsbSerialProber.getDefaultProber().findAllDrivers(SerialComms.getManager()));
+            this.serialComms.setStreamProcessor(ByteStreamProcessor.getInstance(this.serialComms));
         }
 
         usbAttachReceiver = new BroadcastReceiver() {

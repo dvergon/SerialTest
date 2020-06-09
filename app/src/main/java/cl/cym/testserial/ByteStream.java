@@ -7,13 +7,15 @@ public class ByteStream {
     private boolean isProcessed;
     private long creationTS;
     private long processingTS;
+    private String type;
 
-    public ByteStream(byte[] stream){
+    public ByteStream(byte[] stream, String type){
 
         this.stream = stream;
         this.creationTS = System.currentTimeMillis();
         this.isProcessed = false;
         this.status = "received";
+        this.type = type;
 
     }
 
@@ -55,6 +57,14 @@ public class ByteStream {
 
     public void setProcessingTS(long processingTS) {
         this.processingTS = processingTS;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 
     @Override

@@ -56,7 +56,7 @@ public class ByteStreamProcessor implements Runnable {
 
             if(pendingProcessSize > 0){
 
-                ByteStream currentByteStream = new ByteStream(new byte[1]);
+                ByteStream currentByteStream = new ByteStream(new byte[1], "default");
 
                 synchronized (SerialComms.getInstance()){
                     currentByteStream = SerialComms.getPendingProcessStreams().poll();
@@ -76,7 +76,7 @@ public class ByteStreamProcessor implements Runnable {
 
                     if(streamContent.length > 0){
 
-                        //Log.v("streamProc", "stream 1st byte: "+streamContent[0]);
+                        Log.v("streamProc", "stream 1st byte: "+streamContent[0]);
 
                         //check command byte
                         switch(ByteHandleUtils.byteToInt(streamContent[0])){
@@ -95,7 +95,8 @@ public class ByteStreamProcessor implements Runnable {
                                 validCRC = true; //(currentStream[currentStream.length-2] == contentCRC[0]) && (currentStream[currentStream.length-1] == contentCRC[1]);
 
                                 //if valid CRC, process data
-                                if(validCRC){
+                                //remove length check after CRC is working
+                                if(validCRC && streamContent.length > 4){
 
                                     //3 switches with the logic for each stream type for each device (currently 3)
                                     //First check for the NFCs status
@@ -138,7 +139,7 @@ public class ByteStreamProcessor implements Runnable {
 
                                                 synchronized (SerialComms.getInstance()){
 
-                                                    SerialComms.queueStream(new ByteStream(SerialComms.formatStream(saldoStream, true)), "writing");
+                                                    SerialComms.queueStream(new ByteStream(SerialComms.formatStream(saldoStream, true), "command"), "writing");
                                                 }
 
                                                 ByteStreamProcessor.deviceStatuses[1] = 2;
@@ -198,66 +199,71 @@ public class ByteStreamProcessor implements Runnable {
 
                                                 case 83:
                                                     //balance
-                                                    byte[] balance = new byte[3];
-                                                    byte[] uid = new byte[7];
-                                                    //0 to 8 prices array
-                                                    int cardType = ByteHandleUtils.byteToInt(streamContent[6])-11;
+                                                    //streamContent length = 14
 
-                                                    balance = ByteHandleUtils.getBytesFromByteArray(streamContent, 3, 3);
-                                                    uid = ByteHandleUtils.getBytesFromByteArray(streamContent, 7, 7);
+                                                    if(streamContent.length == 14){
+                                                        byte[] balance = new byte[3];
+                                                        byte[] uid = new byte[7];
+                                                        //0 to 8 prices array
+                                                        int cardType = ByteHandleUtils.byteToInt(streamContent[6])-11;
 
-                                                    switch(ByteStreamProcessor.deviceStatuses[1]){
-                                                        case 2:
-                                                            //if status is 2, we send charge stream
-                                                            //127 67 2 80 C1 C2 C3 UID1...UID7 MSB LSB
-                                                            byte[] chargeStream = new byte[13];
+                                                        balance = ByteHandleUtils.getBytesFromByteArray(streamContent, 3, 3);
+                                                        uid = ByteHandleUtils.getBytesFromByteArray(streamContent, 7, 7);
 
-                                                            chargeStream[0] = ByteHandleUtils.intToByte(67);
-                                                            chargeStream[1] = ByteHandleUtils.intToByte(2);
-                                                            chargeStream[3] = ByteHandleUtils.intToByte(80);
+                                                        switch(ByteStreamProcessor.deviceStatuses[1]){
+                                                            case 2:
+                                                                //if status is 2, we send charge stream
+                                                                //127 67 2 80 C1 C2 C3 UID1...UID7 MSB LSB
+                                                                byte[] chargeStream = new byte[13];
 
-                                                            int integerBalance = ByteHandleUtils.threeByteArrayToInteger(balance);
+                                                                chargeStream[0] = ByteHandleUtils.intToByte(67);
+                                                                chargeStream[1] = ByteHandleUtils.intToByte(2);
+                                                                chargeStream[3] = ByteHandleUtils.intToByte(80);
 
-                                                            //check if balance is enough
-                                                            if(integerBalance - ByteStreamProcessor.prices[cardType] >= 0){
+                                                                int integerBalance = ByteHandleUtils.threeByteArrayToInteger(balance);
 
-                                                                byte[] priceByteArray = ByteHandleUtils.intToByteArray(ByteStreamProcessor.prices[cardType],3);
+                                                                //check if balance is enough
+                                                                if(integerBalance - ByteStreamProcessor.prices[cardType] >= 0){
 
-                                                                //add price
-                                                                for(int index = 0; index < priceByteArray.length; index++){
+                                                                    byte[] priceByteArray = ByteHandleUtils.intToByteArray(ByteStreamProcessor.prices[cardType],3);
 
-                                                                    chargeStream[index+4] = priceByteArray[index];
+                                                                    //add price
+                                                                    for(int index = 0; index < priceByteArray.length; index++){
+
+                                                                        chargeStream[index+4] = priceByteArray[index];
+                                                                    }
+
+                                                                    //add UID
+                                                                    for(int index = 0; index < uid.length; index++){
+
+                                                                        chargeStream[index+6] = uid[index];
+                                                                    }
+
+                                                                    byte[] finalStream = SerialComms.formatStream(chargeStream, true);
+
+                                                                    SerialComms.queueStream(new ByteStream(finalStream, "command"), "writing");
+
+                                                                    ByteStreamProcessor.deviceStatuses[1] = 3;
+
+                                                                }else{
+                                                                    //NOT ENOUGH BALANCE
+                                                                    //make change on UI
+
+                                                                    ByteStreamProcessor.deviceStatuses[1] = 0;
                                                                 }
+                                                                break;
 
-                                                                //add UID
-                                                                for(int index = 0; index < uid.length; index++){
-
-                                                                    chargeStream[index+6] = uid[index];
-                                                                }
-
-                                                                byte[] finalStream = SerialComms.formatStream(chargeStream, true);
-
-                                                                SerialComms.queueStream(new ByteStream(finalStream), "writing");
-
-                                                                ByteStreamProcessor.deviceStatuses[1] = 3;
-
-                                                            }else{
-                                                                //NOT ENOUGH BALANCE
-                                                                //make change on UI
+                                                            case 3:
+                                                                //awaiting saldo after charge stream
 
                                                                 ByteStreamProcessor.deviceStatuses[1] = 0;
-                                                            }
-                                                            break;
+                                                                break;
 
-                                                        case 3:
-                                                            //awaiting saldo after charge stream
-
-                                                            ByteStreamProcessor.deviceStatuses[1] = 0;
-                                                            break;
-
-                                                        default:
-                                                            break;
+                                                            default:
+                                                                break;
+                                                        }
                                                     }
+
 
                                                     break;
 
@@ -296,12 +302,18 @@ public class ByteStreamProcessor implements Runnable {
 
     public static byte[] getStreamContent(byte[] stream){
 
-        //get stream and remove header and CRC16
-        byte[] streamContent = new byte[stream.length-3];
+        byte[] streamContent = new byte[1];
+        streamContent[0] = 0;
 
-        for(int index = 1; index < stream.length - 2; index++){
+        if(stream.length-3 > 0){
 
-            streamContent[index-1] = stream[index];
+            //get stream and remove header and CRC16
+            streamContent = new byte[stream.length-3];
+
+            for(int index = 1; index < stream.length - 2; index++){
+
+                streamContent[index-1] = stream[index];
+            }
         }
 
         return streamContent;
