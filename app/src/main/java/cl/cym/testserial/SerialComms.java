@@ -18,15 +18,16 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 
-public class SerialComms extends AppCompatActivity implements Runnable {
+public class SerialComms extends AppCompatActivity implements Runnable, SerialInputOutputManager.Listener {
 
     private static SerialComms serial;
     private static ByteStreamProcessor streamProcessor;
     private static MainActivity activityRef;
-    private static final int WRITE_WAIT_MILLIS = 400;
-    private static final int READ_WAIT_MILLIS = 250;
+    private static final int WRITE_WAIT_MILLIS = 500;
+    private static final int READ_WAIT_MILLIS = 1000;
     private static int baudRate = 57600;
     private static UsbSerialPort currentConnection;
     private static List<UsbSerialDriver> availableDrivers;
@@ -54,8 +55,7 @@ public class SerialComms extends AppCompatActivity implements Runnable {
         SerialComms.reading = false;
         SerialComms.writing = false;
         SerialComms.connected = false;
-
-        //SerialComms.streamProcessor = ByteStreamProcessor.getInstance(serial);
+        SerialComms.waitingCommandResponse = false;
 
         SerialComms.pendingProcessStreams = new ConcurrentLinkedQueue<ByteStream>();
         SerialComms.pendingWritingStreams = new ConcurrentLinkedQueue<ByteStream>();
@@ -71,6 +71,27 @@ public class SerialComms extends AppCompatActivity implements Runnable {
         }
 
         return serial;
+    }
+
+    @Override
+    public void onNewData(byte[] data){
+
+        synchronized (SerialComms.getInstance()){
+            Log.v("SerialComms", "about to queue: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(data)));
+            SerialComms.queueStream(new ByteStream(data, "read"), "processing");
+            SerialComms.setWriting(false);
+            SerialComms.setReading(false);
+            setLastReadTS(System.currentTimeMillis());
+        }
+    }
+
+    @Override
+    public void onRunError(Exception e){
+
+        synchronized (SerialComms.getInstance()){
+
+            SerialComms.setReading(false);
+        }
     }
 
     @Override
@@ -105,8 +126,8 @@ public class SerialComms extends AppCompatActivity implements Runnable {
 
                         //if not reading, check if there is something to write
                         if(SerialComms.pendingWritingStreams.size() > 0){
-                            //if there is something to write, ask if it isn't on timeout
-                            if(isWritingAvailable() && !isWriting()){
+                            //if there is something to write, ask if already writing
+                            if(!isWriting() && isWritingAvailable()){
 
                                 //if writing is available, get item from queue and write
                                 SerialComms.setWriting(true);
@@ -115,125 +136,19 @@ public class SerialComms extends AppCompatActivity implements Runnable {
                                 ByteStream currentStream = SerialComms.pendingWritingStreams.poll();
                                 Log.v("Serialcomms", "just polled pending writing: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(currentStream.getStream())));
 
-                                //purge buffer before writing
-                                try {
-                                    SerialComms.purgeHwBuffers(false, true);
-                                    SerialComms.setSerialWritingThread(new Thread(new SerialWriter(SerialComms.getInstance(), currentStream)));
-                                    SerialComms.startWritingThread();
-                                    this.lastWriteTS = System.currentTimeMillis();
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
 
-                            }
-                        }else{
-                            //if there is nothing to write, check if writing is not on timeout and poll
-                            if(isWritingAvailable() && !isWriting()){
-                                try {
-
-                                    SerialComms.setWriting(true);
-                                    SerialComms.setReading(true);
-
-                                    byte[] poll = new byte[1];
-                                    poll[0] = ByteHandleUtils.intToByte(80);
-
-                                    byte[] formattedStream = formatStream(poll, false);
-
-                                    ByteStream currentStream = new ByteStream(formattedStream, "poll");
-
-                                    //purge buffer before writing
-                                    SerialComms.purgeHwBuffers(false, true);
-                                    SerialComms.setSerialWritingThread(new Thread(new SerialWriter(SerialComms.getInstance(), currentStream)));
-                                    SerialComms.startWritingThread();
-                                    this.lastWriteTS = System.currentTimeMillis();
-
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                    SerialComms.setWriting(false);
-                                }
-
-                            }
-                        }
-                    }else{
-                        //if it's not reading, check if it's not writing
-                        if(!isWriting()){
-                            //if it's not writing, check if reading is not on timeout
-                            if(isReadingAvailable() && isWritingAvailable()){
-                                //if not on timeout, read
-
-                                try {
-                                    //purge buffer before reading
-                                    SerialComms.setReading(true);
-                                    SerialComms.purgeHwBuffers(true, false);
-                                    SerialComms.serialReadingThread = new Thread(new SerialReader(serial, SerialComms.READ_WAIT_MILLIS));
-                                    SerialComms.serialReadingThread.start();
-                                    this.lastReadTS = System.currentTimeMillis();
-
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                    SerialComms.setReading(false);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                //-----
-
-                /*if(!SerialComms.isReading() && SerialComms.isConnected()){
-
-                    try {
-
-                        //purge buffer before reading
-                        if(isReadingAvailable() && !isWriting()){
-
-                            SerialComms.setReading(true);
-
-                            SerialComms.purgeHwBuffers(true, false);
-                            SerialComms.serialReadingThread = new Thread(new SerialReader(serial, SerialComms.READ_WAIT_MILLIS));
-                            SerialComms.serialReadingThread.start();
-                            this.lastReadTS = System.currentTimeMillis();
-                        }
-
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        SerialComms.setReading(false);
-                    }
-
-                    //if not reading or writing or waiting for a command response, pick a queued stream and send it
-                    if(SerialComms.pendingWritingStreams.size() > 0  && !isWriting() && !isWaitingCommandResponse()){
-
-                        try {
-
-                            if(isWritingAvailable()){
-
-                                SerialComms.setWriting(true);
-
-                                ByteStream currentStream = SerialComms.pendingWritingStreams.poll();
-                                Log.v("Serialcomms", "just polled pending writing: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(currentStream.getStream())));
-
-                                //purge buffer before writing
-                                SerialComms.purgeHwBuffers(false, true);
                                 SerialComms.setSerialWritingThread(new Thread(new SerialWriter(SerialComms.getInstance(), currentStream)));
                                 SerialComms.startWritingThread();
                                 this.lastWriteTS = System.currentTimeMillis();
+
                             }
-
-                        } catch (IOException e) {
-                            e.printStackTrace();
-
-                            SerialComms.setWriting(false);
-                        }
-
-                    }else if(!isWriting() && !isWaitingCommandResponse() && SerialComms.pendingWritingStreams.size() <= 0){
-
-                        try {
-
-                            if(isWritingAvailable()){
+                        }else{
+                            //if there is nothing to write, poll
+                            if(!isWriting() && !isWaitingCommandResponse() && isWritingAvailable()){
 
                                 SerialComms.setWriting(true);
+                                SerialComms.setReading(true);
 
-                                //if there are no pending queued streams and is not writing, poll
                                 byte[] poll = new byte[1];
                                 poll[0] = ByteHandleUtils.intToByte(80);
 
@@ -241,28 +156,57 @@ public class SerialComms extends AppCompatActivity implements Runnable {
 
                                 ByteStream currentStream = new ByteStream(formattedStream, "poll");
 
-                                //purge buffer before writing
-                                SerialComms.purgeHwBuffers(false, true);
-                                SerialComms.setSerialWritingThread(new Thread(new SerialWriter(SerialComms.getInstance(), currentStream)));
-                                SerialComms.startWritingThread();
-                                this.lastWriteTS = System.currentTimeMillis();
-                            }
+                                try {
+                                    SerialComms.serialWrite(formattedStream);
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                }
 
+                                this.lastWriteTS = System.currentTimeMillis();
+
+                                //SerialComms.setSerialWritingThread(new Thread(new SerialWriter(SerialComms.getInstance(), currentStream)));
+                                //SerialComms.startWritingThread();
+                            }
+                        }
+                    }
+                    //timeout for reading
+                    if(System.currentTimeMillis() - getLastWriteTS() >= SerialComms.getReadWaitMillis()){
+
+                        try {
+                            SerialComms.purgeHwBuffers(true, false);
                         } catch (IOException e) {
                             e.printStackTrace();
-                            SerialComms.setWriting(false);
+                        }
+
+                        setReading(false);
+                        setWriting(false);
+                        setWaitingCommandResponse(false);
+
+                        synchronized (ByteStreamProcessor.getInstance()){
+
+                            ByteStreamProcessor.resetAllDeviceStatus();
+                        }
+
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
                         }
                     }
 
-                    //timeout on command response
-                    if(isWaitingCommandResponse()){
+                    //timeout for writing
+                    /*if(System.currentTimeMillis() - getLastWriteTS() >= SerialComms.getWriteWaitMillis()){
 
-                        if(System.currentTimeMillis() - getLastCommandWriteTS() >= getReadWaitMillis() ){
-
-                            setWaitingCommandResponse(false);
+                        try {
+                            SerialComms.purgeHwBuffers(false, true);
+                        } catch (IOException e) {
+                            e.printStackTrace();
                         }
-                    }
-                }*/
+
+                        setWriting(false);
+                        setWaitingCommandResponse(false);
+                    }*/
+                }
             }
         }
     }
@@ -302,6 +246,9 @@ public class SerialComms extends AppCompatActivity implements Runnable {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        usbIoManager = new SerialInputOutputManager(currentConnection, this);
+        Executors.newSingleThreadExecutor().submit(usbIoManager);
     }
 
     //SERIAL HANDLER
@@ -586,8 +533,6 @@ public class SerialComms extends AppCompatActivity implements Runnable {
 
         boolean available = System.currentTimeMillis() - this.lastWriteTS >= this.WRITE_WAIT_MILLIS;
 
-
-
         return available;
     }
 
@@ -655,5 +600,17 @@ public class SerialComms extends AppCompatActivity implements Runnable {
 
     public static synchronized void setLastCommandWriteTS(long lastCommandWriteTS) {
         SerialComms.lastCommandWriteTS = lastCommandWriteTS;
+    }
+
+    public static synchronized void listAction(String action){
+
+        SerialComms.activityRef.runOnUiThread(new Runnable() {
+
+            @Override
+            public void run() {
+
+                SerialComms.activityRef.addStreamToHistory(action);
+            }
+        });
     }
 }

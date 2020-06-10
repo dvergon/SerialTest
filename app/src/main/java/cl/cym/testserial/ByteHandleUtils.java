@@ -2,6 +2,8 @@ package cl.cym.testserial;
 
 import android.util.Log;
 
+import java.nio.Buffer;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -40,6 +42,8 @@ public class ByteHandleUtils {
 
         byte[] fourBytes = new byte[4];
 
+        int output = -1;
+
         for(int index = 0; index < 3; index++){
 
             fourBytes[3-index] = array[2-index];
@@ -47,9 +51,22 @@ public class ByteHandleUtils {
 
         fourBytes[0] = intToByte(0);
 
-        ByteBuffer wrapped = ByteBuffer.wrap(array);
+        try{
 
-        return wrapped.getInt();
+            ByteBuffer wrapped = ByteBuffer.wrap(fourBytes);
+            output = wrapped.getInt();
+
+        }catch(BufferUnderflowException e) {
+
+            Log.d("ByteHandleUtils", byteArrayToString(fourBytes));
+        }
+
+        return output;
+    }
+
+    public static String byteArrayToString(byte[] content){
+
+        return intArrayToString(byteArrayToUnsignedIntArray(content));
     }
 
     public static String intArrayToString(int[] content){
@@ -103,9 +120,9 @@ public class ByteHandleUtils {
         byte[] intToBytes = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(number).array();
         byte[] result = new byte[arrayLength];
 
-        for(int index = 1; index < intToBytes.length; index++){
+        for(int index = result.length-1; index >= 0; index--){
 
-            result[index-1] = intToBytes[index];
+            result[index] = intToBytes[intToBytes.length-(1+index)];
         }
 
         return result;
@@ -124,13 +141,34 @@ public class ByteHandleUtils {
         byte[] result = new byte[qty];
 
 
-
         for(int index = 0; index < result.length; index++){
 
             result[index] = byteArray[startIndex+index];
         }
 
         return result;
+    }
+
+    public static boolean byteArraysEquals(byte[] a, byte[] b){
+
+        boolean equals = true;
+
+        if(a.length == b.length){
+
+            for(int index = 0; index < a.length; index++){
+
+                if(byteToInt(a[index]) != byteToInt(b[index])){
+
+                    equals = false;
+                }
+            }
+
+        }else{
+
+            equals = false;
+        }
+
+        return equals;
     }
 
     public static byte[] calculateCRC16(byte[] bytes){
