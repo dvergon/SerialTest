@@ -1,10 +1,6 @@
 package cl.cym.testserial;
 
-import android.util.Log;
-
 import java.io.IOException;
-
-import static android.content.ContentValues.TAG;
 
 public class ByteStreamProcessor implements Runnable {
 
@@ -100,8 +96,6 @@ public class ByteStreamProcessor implements Runnable {
 
                     streamContent = getStreamContent(currentStream);
 
-                    //Log.v("streamProc", "streamLength: "+streamContent.length);
-
                     if(streamContent.length > 0){
 
                         //check command byte
@@ -184,9 +178,6 @@ public class ByteStreamProcessor implements Runnable {
                                                 break;
                                             case 2:
                                                 //balance request waiting for D2 response
-                                                /*synchronized (SerialComms.getInstance()){
-                                                    SerialComms.listAction("Esperando saldo en pago");
-                                                }*/
                                                 break;
                                             case 3:
                                                 //charge sent

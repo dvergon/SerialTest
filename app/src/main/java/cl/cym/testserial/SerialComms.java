@@ -1,25 +1,17 @@
 package cl.cym.testserial;
 
-import android.content.Context;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
-import android.util.Log;
-import android.widget.TextView;
-
 import androidx.appcompat.app.AppCompatActivity;
-
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
-import com.hoho.android.usbserial.driver.UsbSerialProber;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
-import java.util.stream.Stream;
 
 public class SerialComms extends AppCompatActivity implements Runnable, SerialInputOutputManager.Listener {
 
@@ -37,10 +29,6 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
     private static ConcurrentLinkedQueue<ByteStream> pendingWritingStreams;
     private static ConcurrentLinkedQueue<ByteStream> processedStreams;
     private static ConcurrentLinkedQueue<ByteStream> sentStreams;
-    private static Thread paymentThread;
-    private static Thread rechargeThread;
-    private static Thread serialReadingThread;
-    private static Thread serialWritingThread;
     private static Thread streamProcessorThread;
     private static volatile boolean connected;
     private static volatile boolean reading;
@@ -77,7 +65,6 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
     public void onNewData(byte[] data){
 
         synchronized (SerialComms.getInstance()){
-            Log.v("SerialComms", "about to queue: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(data)));
             SerialComms.queueStream(new ByteStream(data, "read"), "processing");
             SerialComms.setWriting(false);
             SerialComms.setReading(false);
@@ -124,49 +111,26 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
                     //check if not reading
                     if(!SerialComms.isReading()){
 
-                        //if not reading, check if there is something to write
-                        if(SerialComms.pendingWritingStreams.size() > 0){
-                            //if there is something to write, ask if already writing
-                            if(!isWriting() && isWritingAvailable()){
+                        //if there is nothing to write, poll
+                        if(!isWriting() && !isWaitingCommandResponse() && isWritingAvailable()){
 
-                                //if writing is available, get item from queue and write
-                                SerialComms.setWriting(true);
-                                SerialComms.setReading(true);
+                            SerialComms.setWriting(true);
+                            SerialComms.setReading(true);
 
-                                ByteStream currentStream = SerialComms.pendingWritingStreams.poll();
-                                Log.v("Serialcomms", "just polled pending writing: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(currentStream.getStream())));
+                            byte[] poll = new byte[1];
+                            poll[0] = ByteHandleUtils.intToByte(80);
 
+                            byte[] formattedStream = formatStream(poll, false);
 
-                                SerialComms.setSerialWritingThread(new Thread(new SerialWriter(SerialComms.getInstance(), currentStream)));
-                                SerialComms.startWritingThread();
-                                this.lastWriteTS = System.currentTimeMillis();
+                            ByteStream currentStream = new ByteStream(formattedStream, "poll");
 
+                            try {
+                                SerialComms.serialWrite(formattedStream);
+                            } catch (IOException e) {
+                                e.printStackTrace();
                             }
-                        }else{
-                            //if there is nothing to write, poll
-                            if(!isWriting() && !isWaitingCommandResponse() && isWritingAvailable()){
 
-                                SerialComms.setWriting(true);
-                                SerialComms.setReading(true);
-
-                                byte[] poll = new byte[1];
-                                poll[0] = ByteHandleUtils.intToByte(80);
-
-                                byte[] formattedStream = formatStream(poll, false);
-
-                                ByteStream currentStream = new ByteStream(formattedStream, "poll");
-
-                                try {
-                                    SerialComms.serialWrite(formattedStream);
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
-
-                                this.lastWriteTS = System.currentTimeMillis();
-
-                                //SerialComms.setSerialWritingThread(new Thread(new SerialWriter(SerialComms.getInstance(), currentStream)));
-                                //SerialComms.startWritingThread();
-                            }
+                            this.lastWriteTS = System.currentTimeMillis();
                         }
                     }
                     //timeout for reading
@@ -193,19 +157,6 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
                             e.printStackTrace();
                         }
                     }
-
-                    //timeout for writing
-                    /*if(System.currentTimeMillis() - getLastWriteTS() >= SerialComms.getWriteWaitMillis()){
-
-                        try {
-                            SerialComms.purgeHwBuffers(false, true);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-
-                        setWriting(false);
-                        setWaitingCommandResponse(false);
-                    }*/
                 }
             }
         }
@@ -340,11 +291,9 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
 
         switch(type){
             case "processing":
-                Log.v("SerialComms", "about to queue processing: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(stream.getStream())));
                 SerialComms.pendingProcessStreams.add(stream);
                 break;
             case "writing":
-                Log.v("SerialComms", "about to queue writing: "+ByteHandleUtils.intArrayToString(ByteHandleUtils.byteArrayToUnsignedIntArray(stream.getStream())));
                 SerialComms.pendingWritingStreams.add(stream);
                 break;
             default:
@@ -454,38 +403,6 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
         SerialComms.sentStreams = sentStreams;
     }
 
-    public static Thread getPaymentThread() {
-        return paymentThread;
-    }
-
-    public static void setPaymentThread(Thread paymentThread) {
-        SerialComms.paymentThread = paymentThread;
-    }
-
-    public static Thread getRechargeThread() {
-        return rechargeThread;
-    }
-
-    public static void setRechargeThread(Thread rechargeThread) {
-        SerialComms.rechargeThread = rechargeThread;
-    }
-
-    public static Thread getSerialReadingThread() {
-        return serialReadingThread;
-    }
-
-    public static void setSerialReadingThread(Thread serialReadingThread) {
-        SerialComms.serialReadingThread = serialReadingThread;
-    }
-
-    public static Thread getSerialWritingThread() {
-        return serialWritingThread;
-    }
-
-    public static synchronized void setSerialWritingThread(Thread serialWritingThread) {
-        SerialComms.serialWritingThread = serialWritingThread;
-    }
-
     public static boolean isConnected() {
         return connected;
     }
@@ -573,16 +490,6 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
 
     public static void setLastWriteTS(long lastWriteTS) {
         SerialComms.lastWriteTS = lastWriteTS;
-    }
-
-    public static synchronized void startWritingThread(){
-
-        SerialComms.serialWritingThread.start();
-    }
-
-    public static synchronized void startReadingThread(){
-
-        SerialComms.serialReadingThread.start();
     }
 
     public static synchronized void setWaitingCommandResponse(boolean status){
