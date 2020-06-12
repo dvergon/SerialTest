@@ -7,6 +7,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.hardware.usb.UsbManager;
+import android.media.AudioAttributes;
+import android.media.SoundPool;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -18,6 +20,7 @@ import com.hoho.android.usbserial.driver.UsbSerialProber;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -28,10 +31,26 @@ public class MainActivity extends AppCompatActivity {
     private BroadcastReceiver permissionReceiver;
     private ArrayList<String> streamHistory;
     private ArrayAdapter<String> streamHistoryAdapter;
+    private static SoundPool soundPool;
+    private static HashMap<Integer, Integer> soundPoolMap;
+    private static final int correctSound = R.raw.s1_8bitsuccess;
+    private static final int errorSound = R.raw.s2_8biterror;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
+        AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build();
+
+        this.soundPool = new SoundPool.Builder().setMaxStreams(6).setAudioAttributes(audioAttributes).build();
+        this.soundPoolMap = new HashMap<Integer, Integer>(3);
+
+        this.soundPoolMap.put(correctSound, soundPool.load(getApplicationContext(), R.raw.s1_8bitsuccess,1));
+        this.soundPoolMap.put(errorSound, soundPool.load(getApplicationContext(), R.raw.s2_8biterror,2));
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         this.serialComms = SerialComms.getInstance();
@@ -61,7 +80,11 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onReceive(Context context, Intent intent) {
 
-                /*serialCommsThread.interrupt();
+                /*synchronized (serialComms){
+                    serialComms.setConnected(false);
+                }
+
+                serialCommsThread.interrupt();
                 serialCommsThread = new Thread();*/
             }
         };
@@ -74,90 +97,53 @@ public class MainActivity extends AppCompatActivity {
         filterDetach.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         registerReceiver(usbDetachReceiver, filterDetach);
 
-        ListView streamHistory = (ListView) findViewById(R.id.list_streamHistory);
-        this.streamHistory = new ArrayList<String>();
-        this.streamHistoryAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_expandable_list_item_1, this.streamHistory);
-        streamHistory.setAdapter(this.streamHistoryAdapter);
+        synchronized (serialComms){
+            serialComms.setConnected(false);
+        }
 
+        serialCommsThread = new Thread(serialComms);
+        serialCommsThread.start();
+    }
 
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            hideSystemUI();
+        }
+    }
 
-        //LISTENERS
-        final Button buttonStart = (Button) findViewById(R.id.btn_start);
-        buttonStart.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
+    private void hideSystemUI() {
+        // Enables regular immersive mode.
+        // For "lean back" mode, remove SYSTEM_UI_FLAG_IMMERSIVE.
+        // Or for "sticky immersive," replace it with SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        // Set the content to appear under the system bars so that the
+                        // content doesn't resize when the system bars hide and show.
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        // Hide the nav bar and status bar
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN);
+    }
 
-                serialCommsThread = new Thread(serialComms);
-                serialCommsThread.start();
-            }
-        });
-
-        final Button buttonSent = (Button) findViewById(R.id.btn_sent);
-        buttonSent.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-
-                synchronized (serialComms) {
-                    String[] strArray = Arrays.stream(SerialComms.getSentStreams().toArray()).map(Object::toString).toArray(String[]::new);
-
-                    setStreamHistory(new ArrayList<String>(Arrays.asList(strArray)));
-
-                    updateListContent();
-
-                    updateStatusText(strArray.length+"");
-                }
-
-            }
-        });
-
-        final Button buttonProcess = (Button) findViewById(R.id.btn_process);
-        buttonProcess.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-
-                synchronized (serialComms){
-                    String[] strArray = Arrays.stream(SerialComms.getPendingProcessStreams().toArray()).map(Object::toString).toArray(String[]::new);
-
-                    setStreamHistory(new ArrayList<String>(Arrays.asList(strArray)));
-
-                    updateListContent();
-
-                    updateStatusText(strArray.length+"");
-                }
-            }
-        });
-
-        final Button buttonWriting = (Button) findViewById(R.id.btn_writing);
-        buttonWriting.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-
-                synchronized (serialComms){
-
-                    String[] strArray = Arrays.stream(serialComms.getPendingWritingStreams().toArray()).map(Object::toString).toArray(String[]::new);
-
-                    setStreamHistory(new ArrayList<String>(Arrays.asList(strArray)));
-
-                    updateListContent();
-
-                    updateStatusText(strArray.length+"");
-                }
-            }
-        });
+    // Shows the system bars by removing all the flags
+// except for the ones that make the content appear under the system bars.
+    private void showSystemUI() {
+        View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
     }
 
     //GETTER AND SETTERS
 
-    public synchronized void addStreamToHistory(String stream){
-
-        this.streamHistory.add(stream);
-        this.streamHistoryAdapter.notifyDataSetChanged();
-    }
-
     public void updateListContent(){
         this.streamHistoryAdapter.notifyDataSetChanged();
-    }
-
-    public synchronized void updateStatusText(String text){
-
-        TextView connectedStatus = (TextView) findViewById(R.id.text_status);
-        connectedStatus.setText(text);
     }
 
     public BroadcastReceiver getUsbAttachReceiver() {
@@ -192,15 +178,32 @@ public class MainActivity extends AppCompatActivity {
         this.streamHistoryAdapter = streamHistoryAdapter;
     }
 
-    public synchronized void setWritingStatus(String status){
+    public synchronized void setActionText(String text){
 
-        TextView connectedStatus = (TextView) findViewById(R.id.writingStatus);
-        connectedStatus.setText("Writing: " + status);
+        TextView tv1 = (TextView)findViewById(R.id.text_actions);
+        tv1.setText(text);
     }
 
-    public synchronized void setReadingStatus(String status){
+    public synchronized void setActionDetailText(String text){
 
-        TextView connectedStatus = (TextView) findViewById(R.id.readingStatus);
-        connectedStatus.setText("Reading: " + status);
+        TextView tv1 = (TextView)findViewById(R.id.text_actiondetail);
+        tv1.setText(text);
+    }
+
+    public synchronized void playSound(int sound){
+
+        float volume = (float) 1;
+
+        soundPool.play(soundPoolMap.get(sound), volume, volume, 1, 0, 1f);
+    }
+
+    public static synchronized int getCorrectSound(){
+
+        return correctSound;
+    }
+
+    public static synchronized int getErrorSound(){
+
+        return errorSound;
     }
 }

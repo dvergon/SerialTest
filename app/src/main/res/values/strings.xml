@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">CYM_TestSerial</string>
+    <string name="pay_label">Paga tu pasaje aquí</string>
+    <string name="bill_label">Inserta los billetes aquí</string>
+    <string name="recharge_label">Inserta tu tarjeta para realizar una recarga o consultar tu saldo</string>
+    <string name="action"></string>
+    <string name="action_detail"></string>
 </resources>

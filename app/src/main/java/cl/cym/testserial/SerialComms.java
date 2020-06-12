@@ -2,6 +2,10 @@ package cl.cym.testserial;
 
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
+import android.media.SoundPool;
+
 import androidx.appcompat.app.AppCompatActivity;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
@@ -9,6 +13,7 @@ import com.hoho.android.usbserial.util.SerialInputOutputManager;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
@@ -90,15 +95,6 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
 
                 appSerialConnect();
 
-                runOnUiThread(new Runnable() {
-
-                    @Override
-                    public void run() {
-
-                        SerialComms.activityRef.updateStatusText("Connected: "+ isConnected());
-                    }
-                });
-
                 SerialComms.streamProcessorThread = new Thread(ByteStreamProcessor.getInstance(getInstance()));
                 SerialComms.streamProcessorThread.start();
             }
@@ -160,18 +156,6 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
                 }
             }
         }
-    }
-
-    public synchronized void addStreamToList(final String stream){
-
-        runOnUiThread(new Runnable() {
-
-            @Override
-            public void run() {
-
-                SerialComms.activityRef.addStreamToHistory(stream);
-            }
-        });
     }
 
     public static synchronized void purgeHwBuffers(boolean read, boolean write) throws IOException {
@@ -417,15 +401,6 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
 
     public static synchronized void setReading(boolean reading) {
         SerialComms.reading = reading;
-
-       activityRef.runOnUiThread(new Runnable() {
-
-            @Override
-            public void run() {
-
-                SerialComms.activityRef.setReadingStatus(SerialComms.isReading()+"");
-            }
-        });
     }
 
     public synchronized static boolean isWriting() {
@@ -434,16 +409,6 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
 
     public static synchronized void setWriting(boolean writing) {
         SerialComms.writing = writing;
-
-
-        activityRef.runOnUiThread(new Runnable() {
-
-            @Override
-            public void run() {
-
-                SerialComms.activityRef.setWritingStatus(SerialComms.isWriting()+"");
-            }
-        });
     }
 
     public boolean isWritingAvailable(){
@@ -509,14 +474,40 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
         SerialComms.lastCommandWriteTS = lastCommandWriteTS;
     }
 
-    public static synchronized void listAction(String action){
+    public static synchronized void setActionText(String main, String detail){
 
-        SerialComms.activityRef.runOnUiThread(new Runnable() {
-
+        activityRef.runOnUiThread(new Runnable() {
             @Override
             public void run() {
 
-                SerialComms.activityRef.addStreamToHistory(action);
+                activityRef.setActionText(main);
+                activityRef.setActionDetailText(detail);
+            }
+        });
+    }
+
+    public static synchronized void clearActionText(){
+
+        setActionText("","");
+    }
+
+    public static synchronized void playSound(String sound){
+
+        activityRef.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+
+                int intSound;
+
+                switch (sound){
+                    case "correct":
+                        activityRef.playSound(activityRef.getCorrectSound());
+                        break;
+
+                    case "error":
+                        activityRef.playSound(activityRef.getErrorSound());
+                        break;
+                }
             }
         });
     }

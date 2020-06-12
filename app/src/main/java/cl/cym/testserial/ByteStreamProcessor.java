@@ -1,5 +1,7 @@
 package cl.cym.testserial;
 
+import android.util.Log;
+
 import java.io.IOException;
 
 public class ByteStreamProcessor implements Runnable {
@@ -9,11 +11,17 @@ public class ByteStreamProcessor implements Runnable {
     //D1,D2,D3
     //Bill, NFC Pay, NFC Recharge
     private static int[] deviceStatuses = new int[3];
+    private static int[][] deviceStatusesTimeout = new int[3][5];
+
+    private static int idleCount;
+
     private static int[] prices = new int[9];
+    private static String[] pricesNames = new String[9];
     private static int[] billValues = new int[16];
 
     private static byte[] currentPaymentUID;
     private static byte[] currentRechargeStream;
+    private static String lastPaymentType;
 
     private static int nfcPaymentCardType;
     private static int nfcRechargeCardType;
@@ -31,18 +39,30 @@ public class ByteStreamProcessor implements Runnable {
         ByteStreamProcessor.deviceStatuses[1] = 0;
         ByteStreamProcessor.deviceStatuses[2] = 0;
 
+        ByteStreamProcessor.idleCount = 0;
+
         ByteStreamProcessor.nfcPaymentCardType = -1;
         ByteStreamProcessor.nfcRechargeCardType = -1;
 
         ByteStreamProcessor.prices[0] = 0;
-        ByteStreamProcessor.prices[1] = 170;
+        ByteStreamProcessor.prices[1] = 0;
         ByteStreamProcessor.prices[2] = 170;
-        ByteStreamProcessor.prices[3] = 500;
+        ByteStreamProcessor.prices[3] = 170;
         ByteStreamProcessor.prices[4] = 400;
-        ByteStreamProcessor.prices[5] = 0;
+        ByteStreamProcessor.prices[5] = 350;
         ByteStreamProcessor.prices[6] = 0;
         ByteStreamProcessor.prices[7] = 0;
         ByteStreamProcessor.prices[8] = 0;
+
+        ByteStreamProcessor.pricesNames[0] = "NO DEFINIDO";
+        ByteStreamProcessor.pricesNames[1] = "TNE BASICA";
+        ByteStreamProcessor.pricesNames[2] = "TNE MEDIA";
+        ByteStreamProcessor.pricesNames[3] = "TNE SUPERIOR";
+        ByteStreamProcessor.pricesNames[4] = "ADULTO";
+        ByteStreamProcessor.pricesNames[5] = "ADULTO MAYOR";
+        ByteStreamProcessor.pricesNames[0] = "NO DEFINIDO";
+        ByteStreamProcessor.pricesNames[0] = "NO DEFINIDO";
+        ByteStreamProcessor.pricesNames[0] = "NO DEFINIDO";
 
         ByteStreamProcessor.billValues[0] = 1000;
         ByteStreamProcessor.billValues[1] = 2000;
@@ -134,6 +154,34 @@ public class ByteStreamProcessor implements Runnable {
                                     //  4: Prepago general
                                     //  5: Adulto mayor
 
+                                    //check if all devices idling
+                                    int[] idleStreamContent = new int[5];
+                                    idleStreamContent[0] = 83;
+                                    idleStreamContent[1] = 3;
+                                    idleStreamContent[2] = 100;
+                                    idleStreamContent[3] = 1;
+                                    idleStreamContent[4] = 1;
+
+                                    int[] contentToInt = ByteHandleUtils.byteArrayToUnsignedIntArray(streamContent);
+
+                                    if(ByteHandleUtils.intArraysEquals(idleStreamContent, contentToInt)){
+
+                                        ByteStreamProcessor.idleCount++;
+
+                                        if(idleCount > 4){
+
+                                            ByteStreamProcessor.idleCount = 0;
+
+                                            synchronized (SerialComms.getInstance()){
+
+                                                SerialComms.clearActionText();
+                                            }
+                                        }
+                                    }else{
+
+                                        ByteStreamProcessor.idleCount = 0;
+                                    }
+
                                     if(ByteHandleUtils.byteToInt(streamContent[3]) > 1){
 
                                         //change to reading card if idle
@@ -145,6 +193,7 @@ public class ByteStreamProcessor implements Runnable {
                                         switch(ByteStreamProcessor.deviceStatuses[1]){
                                             case 0:
                                                 //idle
+
                                                 break;
                                             case 1:
                                                 //card detected
@@ -165,7 +214,7 @@ public class ByteStreamProcessor implements Runnable {
                                                         SerialComms.setWriting(true);
                                                         SerialComms.setWaitingCommandResponse(true);
                                                         SerialComms.setLastWriteTS(System.currentTimeMillis());
-                                                        SerialComms.listAction("Tarjeta detectada en pago, pidiendo saldo - "+ByteHandleUtils.byteArrayToString(finalStream));
+                                                        //SerialComms.listAction("Tarjeta detectada en pago, pidiendo saldo - "+ByteHandleUtils.byteArrayToString(finalStream));
                                                         SerialComms.serialWrite(finalStream);
                                                     } catch (IOException e) {
                                                         e.printStackTrace();
@@ -211,7 +260,7 @@ public class ByteStreamProcessor implements Runnable {
                                     //  3 = $5.000
                                     //  4 = $10.000
 
-                                    //D1 and D2 work in tandem, so both of them will be sharing the same control structure
+                                    //D1 and D3 work in tandem, so both of them will be sharing the same control structure
                                     //D1 acts as an slave, depending on D3 status D1 reacts
 
                                     if(ByteHandleUtils.byteToInt(streamContent[4]) > 1){
@@ -240,7 +289,7 @@ public class ByteStreamProcessor implements Runnable {
 
                                                         try {
                                                             SerialComms.setWriting(true);
-                                                            SerialComms.listAction("Rechazando billete - "+ByteHandleUtils.byteArrayToString(streamContent));
+                                                            //SerialComms.listAction("Rechazando billete - "+ByteHandleUtils.byteArrayToString(streamContent));
                                                             SerialComms.setLastWriteTS(System.currentTimeMillis());
                                                             SerialComms.serialWrite(finalStream);
                                                         } catch (IOException e) {
@@ -267,7 +316,7 @@ public class ByteStreamProcessor implements Runnable {
                                                     byte[] finalStream = SerialComms.formatStream(saldoStream, true);
 
                                                     try {
-                                                        SerialComms.listAction("Tarjeta detectada en recarga, pidiendo saldo - "+ByteHandleUtils.byteArrayToString(finalStream));
+                                                        //SerialComms.listAction("Tarjeta detectada en recarga, pidiendo saldo - "+ByteHandleUtils.byteArrayToString(finalStream));
                                                         SerialComms.setWriting(true);
                                                         SerialComms.setWaitingCommandResponse(true);
                                                         SerialComms.setLastWriteTS(System.currentTimeMillis());
@@ -293,7 +342,7 @@ public class ByteStreamProcessor implements Runnable {
                                                         byte[] finalStream = SerialComms.formatStream(rejectStream, true);
 
                                                         try {
-                                                            SerialComms.listAction("Rechazando billete - "+ByteHandleUtils.byteArrayToString(streamContent));
+                                                            //SerialComms.listAction("Rechazando billete - "+ByteHandleUtils.byteArrayToString(streamContent));
                                                             SerialComms.setLastWriteTS(System.currentTimeMillis());
                                                             SerialComms.serialWrite(finalStream);
                                                         } catch (IOException e) {
@@ -308,7 +357,7 @@ public class ByteStreamProcessor implements Runnable {
                                             case 2:
                                                 //balance request waiting for D3 response
                                                 synchronized (SerialComms.getInstance()){
-                                                    SerialComms.listAction("Esperando saldo en recarga");
+                                                    //SerialComms.listAction("Esperando saldo en recarga");
                                                 }
 
                                                 //if, while asking for balance, bill acceptor has something in it, send reject
@@ -324,7 +373,7 @@ public class ByteStreamProcessor implements Runnable {
                                                         byte[] finalStream = SerialComms.formatStream(rejectStream, true);
 
                                                         try {
-                                                            SerialComms.listAction("Rechazando billete - "+ByteHandleUtils.byteArrayToString(streamContent));
+                                                            //SerialComms.listAction("Rechazando billete - "+ByteHandleUtils.byteArrayToString(streamContent));
                                                             SerialComms.setLastWriteTS(System.currentTimeMillis());
                                                             SerialComms.serialWrite(finalStream);
                                                         } catch (IOException e) {
@@ -341,23 +390,9 @@ public class ByteStreamProcessor implements Runnable {
                                                 //if bill acceptor has something in it, accept and send recharge stream
                                                 if(ByteHandleUtils.byteToInt(streamContent[2]) >= 1 && ByteHandleUtils.byteToInt(streamContent[2]) <= 16){
 
-                                                    byte[] acceptStream = new byte[3];
-                                                    acceptStream[0] = ByteHandleUtils.intToByte(67);
-                                                    acceptStream[1] = ByteHandleUtils.intToByte(1);
-                                                    acceptStream[2] = ByteHandleUtils.intToByte(65);
-
                                                     synchronized (SerialComms.getInstance()){
 
-                                                        byte[] finalStream = SerialComms.formatStream(acceptStream, true);
-
                                                         try {
-                                                            SerialComms.listAction("Aceptando billete de "+billValues[ByteHandleUtils.byteToInt(streamContent[2])-1]+" - "+ByteHandleUtils.byteArrayToString(finalStream));
-                                                            SerialComms.serialWrite(finalStream);
-
-                                                            ByteStreamProcessor.deviceStatuses[0] = 0;
-
-                                                            Thread.sleep(100);
-
                                                             byte[] oldBalanceBytes = new byte[3];
                                                             oldBalanceBytes[0] = ByteHandleUtils.intToByte(0);
                                                             oldBalanceBytes[1] = currentRechargeStream[3];
@@ -368,14 +403,15 @@ public class ByteStreamProcessor implements Runnable {
                                                             currentRechargeStream[3] = ByteHandleUtils.intToByteArray(oldBalance + billValues[ByteHandleUtils.byteToInt(streamContent[2])-1], 2)[1];
                                                             currentRechargeStream[4] = ByteHandleUtils.intToByteArray(oldBalance + billValues[ByteHandleUtils.byteToInt(streamContent[2])-1], 2)[0];
 
-
-
-                                                            finalStream = SerialComms.formatStream(currentRechargeStream, true);
+                                                            byte[] finalStream = SerialComms.formatStream(currentRechargeStream, true);
 
                                                             SerialComms.setWriting(true);
                                                             SerialComms.setLastWriteTS(System.currentTimeMillis());
-                                                            SerialComms.listAction("Recargando "+billValues[ByteHandleUtils.byteToInt(streamContent[2])-1]+" - "+ByteHandleUtils.byteArrayToString(finalStream));
+                                                           //SerialComms.listAction("Recargando "+billValues[ByteHandleUtils.byteToInt(streamContent[2])-1]+" - "+ByteHandleUtils.byteArrayToString(finalStream));
+                                                            SerialComms.setActionText("RECARGANDO", billValues[ByteHandleUtils.byteToInt(streamContent[2])-1]+"");
                                                             SerialComms.serialWrite(finalStream);
+
+                                                            Thread.sleep(100);
 
                                                         } catch (IOException | InterruptedException e) {
                                                             e.printStackTrace();
@@ -383,12 +419,34 @@ public class ByteStreamProcessor implements Runnable {
                                                         }
                                                     }
 
-                                                    ByteStreamProcessor.deviceStatuses[2] = 2;
+                                                    ByteStreamProcessor.deviceStatuses[2] = 4;
                                                 }
 
                                                 break;
                                             case 4:
-                                                //balance post charge
+
+                                                synchronized (SerialComms.getInstance()){
+
+                                                    byte[] acceptStream = new byte[3];
+                                                    acceptStream[0] = ByteHandleUtils.intToByte(67);
+                                                    acceptStream[1] = ByteHandleUtils.intToByte(1);
+                                                    acceptStream[2] = ByteHandleUtils.intToByte(65);
+
+                                                    byte[] finalStream = SerialComms.formatStream(acceptStream, true);
+
+                                                    //balance post charge
+                                                    //SerialComms.listAction("Aceptando billete de "+billValues[ByteHandleUtils.byteToInt(streamContent[2])-1]+" - "+ByteHandleUtils.byteArrayToString(finalStream));
+
+                                                    try {
+                                                        SerialComms.serialWrite(finalStream);
+                                                    } catch (IOException e) {
+                                                        e.printStackTrace();
+                                                    }
+
+                                                    ByteStreamProcessor.deviceStatuses[2] = 1;
+                                                    ByteStreamProcessor.deviceStatuses[0] = 0;
+                                                }
+
                                                 break;
                                         }
 
@@ -407,7 +465,7 @@ public class ByteStreamProcessor implements Runnable {
                                                 byte[] finalStream = SerialComms.formatStream(rejectStream, true);
 
                                                 try {
-                                                    SerialComms.listAction("Rechazando billete - "+ByteHandleUtils.byteArrayToString(streamContent));
+                                                    //SerialComms.listAction("Rechazando billete - "+ByteHandleUtils.byteArrayToString(streamContent));
                                                     SerialComms.setLastWriteTS(System.currentTimeMillis());
                                                     SerialComms.serialWrite(finalStream);
                                                 } catch (IOException e) {
@@ -475,9 +533,11 @@ public class ByteStreamProcessor implements Runnable {
 
                                                                 //show balance
                                                                 synchronized (SerialComms.getInstance()){
-                                                                    SerialComms.listAction("Saldo: "+integerBalance);
+                                                                    //SerialComms.listAction("Saldo: "+integerBalance);
                                                                     SerialComms.setWaitingCommandResponse(false);
                                                                 }
+
+                                                                lastPaymentType = ByteStreamProcessor.pricesNames[cardType] + " $" +ByteStreamProcessor.prices[cardType];
 
                                                                 //check if balance is enough
                                                                 if(integerBalance - ByteStreamProcessor.prices[cardType] >= 0){
@@ -497,11 +557,11 @@ public class ByteStreamProcessor implements Runnable {
                                                                         chargeStream[index+5] = uid[index];
                                                                     }
 
-                                                                    //cant charge twice in a row the same card
-                                                                    if(ByteHandleUtils.byteArraysEquals(currentPaymentUID, uid)){
+                                                                    //cant charge twice in a row the same card if TNE
+                                                                    if(ByteHandleUtils.byteArraysEquals(currentPaymentUID, uid) && cardType < 3){
 
                                                                         synchronized (SerialComms.getInstance()){
-                                                                            SerialComms.listAction("Cobro ya realizado");
+                                                                            //SerialComms.listAction("Cobro ya realizado");
                                                                             SerialComms.setWaitingCommandResponse(false);
                                                                         }
 
@@ -513,15 +573,13 @@ public class ByteStreamProcessor implements Runnable {
 
                                                                         byte[] finalStream = SerialComms.formatStream(chargeStream, true);
 
-                                                                        //SerialComms.queueStream(new ByteStream(finalStream, "command"), "writing");
-
                                                                         synchronized (SerialComms.getInstance()){
 
                                                                             try {
                                                                                 SerialComms.setWriting(true);
                                                                                 SerialComms.setLastWriteTS(System.currentTimeMillis());
                                                                                 SerialComms.serialWrite(finalStream);
-                                                                                SerialComms.listAction("Enviado nuevo saldo: "+ByteHandleUtils.byteArrayToString(finalStream));
+                                                                                //SerialComms.listAction("Enviado nuevo saldo: "+ByteHandleUtils.byteArrayToString(finalStream));
                                                                                 SerialComms.setWaitingCommandResponse(true);
                                                                             } catch (IOException e) {
                                                                                 e.printStackTrace();
@@ -537,11 +595,11 @@ public class ByteStreamProcessor implements Runnable {
                                                                     //make change on UI
 
                                                                     synchronized (SerialComms.getInstance()){
-                                                                        SerialComms.listAction("Saldo Insuficiente");
+                                                                        //SerialComms.listAction("Saldo Insuficiente");
+                                                                        SerialComms.setActionText("SALDO INSUFICIENTE - "+lastPaymentType, integerBalance+"");
+                                                                        SerialComms.playSound("error");
                                                                         SerialComms.setWaitingCommandResponse(false);
                                                                     }
-
-                                                                    currentPaymentUID = uid;
 
                                                                     ByteStreamProcessor.deviceStatuses[1] = 0;
                                                                 }
@@ -554,9 +612,13 @@ public class ByteStreamProcessor implements Runnable {
 
                                                                 //show balance
                                                                 synchronized (SerialComms.getInstance()){
-                                                                    SerialComms.listAction("Nuevo Saldo: "+integerBalance);
+                                                                    //SerialComms.listAction("Nuevo Saldo: "+integerBalance);
+                                                                    SerialComms.setActionText("PAGADO "+lastPaymentType, "SALDO: $"+integerBalance+"");
+                                                                    SerialComms.playSound("correct");
                                                                     SerialComms.setWaitingCommandResponse(false);
                                                                 }
+
+                                                                lastPaymentType = "";
 
                                                                 ByteStreamProcessor.deviceStatuses[1] = 0;
                                                                 break;
@@ -614,7 +676,8 @@ public class ByteStreamProcessor implements Runnable {
 
                                                             //show balance
                                                             synchronized (SerialComms.getInstance()){
-                                                                SerialComms.listAction("Saldo actual: "+integerBalance);
+                                                                //SerialComms.listAction("Saldo actual: "+integerBalance);
+                                                                SerialComms.setActionText("SALDO ACTUAL", integerBalance+"");
                                                                 SerialComms.setWaitingCommandResponse(false);
                                                             }
 

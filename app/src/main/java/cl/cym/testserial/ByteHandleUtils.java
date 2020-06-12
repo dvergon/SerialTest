@@ -171,6 +171,28 @@ public class ByteHandleUtils {
         return equals;
     }
 
+    public static boolean intArraysEquals(int[] a, int[] b){
+
+        boolean equals = true;
+
+        if(a.length == b.length){
+
+            for(int index = 0; index < a.length; index++){
+
+                if(a[index] != b[index]){
+
+                    equals = false;
+                }
+            }
+
+        }else{
+
+            equals = false;
+        }
+
+        return equals;
+    }
+
     public static byte[] calculateCRC16(byte[] bytes){
 
         byte[] CRC16Long;
