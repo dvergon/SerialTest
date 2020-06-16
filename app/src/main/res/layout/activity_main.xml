@@ -6,110 +6,137 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <ImageView
-        android:id="@+id/img_payArrow"
-        android:layout_width="165dp"
-        android:layout_height="0dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
-        app:layout_constraintBottom_toTopOf="@+id/text_pay"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:srcCompat="@drawable/curved_arrow" />
+    <RelativeLayout
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        tools:ignore="MissingConstraints">
 
-    <TextView
-        android:id="@+id/text_pay"
-        android:layout_width="350dp"
-        android:layout_height="0dp"
-        android:layout_marginStart="40dp"
-        android:layout_marginBottom="823dp"
-        android:fontFamily="casual"
-        android:text="@string/pay_label"
-        android:textColor="#123c80"
-        android:textSize="35sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/text_recharge"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/img_payArrow"
-        tools:text="@string/pay_label" />
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/main_content"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
 
-    <ImageView
-        android:id="@+id/img_billArrow"
-        android:layout_width="143dp"
-        android:layout_height="456dp"
-        android:layout_marginEnd="104dp"
-        android:layout_marginBottom="12dp"
-        app:layout_constraintBottom_toBottomOf="@+id/text_billAcceptor"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:srcCompat="@drawable/curved_arrow180y" />
+            <ImageView
+                android:id="@+id/img_payArrow"
+                android:layout_width="129dp"
+                android:layout_height="165dp"
+                android:layout_marginStart="84dp"
+                android:layout_marginTop="16dp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:srcCompat="@drawable/curved_arrow" />
 
-    <ImageView
-        android:id="@+id/imageView5"
-        android:layout_width="270dp"
-        android:layout_height="0dp"
-        android:layout_marginEnd="6dp"
-        android:layout_marginBottom="155dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/text_billAcceptor"
-        app:srcCompat="@drawable/curved_arrowh" />
+            <TextView
+                android:id="@+id/text_recharge"
+                android:layout_width="473dp"
+                android:layout_height="350dp"
+                android:layout_marginStart="60dp"
+                android:layout_marginBottom="36dp"
+                android:fontFamily="casual"
+                android:text="@string/recharge_label"
+                android:textColor="#123c80"
+                android:textSize="50dp"
+                android:textStyle="bold"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                tools:text="@string/recharge_label" />
 
-    <TextView
-        android:id="@+id/text_recharge"
-        android:layout_width="473dp"
-        android:layout_height="159dp"
-        android:layout_marginStart="138dp"
-        android:layout_marginBottom="26dp"
-        android:fontFamily="casual"
-        android:text="@string/recharge_label"
-        android:textColor="#123c80"
-        android:textSize="35sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/text_pay"
-        tools:text="@string/recharge_label" />
+            <TextView
+                android:id="@+id/text_pay"
+                android:layout_width="500dp"
+                android:layout_height="235dp"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="12dp"
+                android:fontFamily="casual"
+                android:text="@string/pay_label"
+                android:textColor="#123c80"
+                android:textSize="50dp"
+                android:textStyle="bold"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/img_payArrow"
+                tools:text="@string/pay_label" />
 
-    <TextView
-        android:id="@+id/text_billAcceptor"
-        android:layout_width="414dp"
-        android:layout_height="0dp"
-        android:layout_marginTop="267dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="651dp"
-        android:fontFamily="casual"
-        android:text="@string/bill_label"
-        android:textColor="#123c80"
-        android:textSize="35sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/imageView5"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        tools:text="@string/bill_label" />
+            <ImageView
+                android:id="@+id/img_billArrow"
+                android:layout_width="121dp"
+                android:layout_height="257dp"
+                android:layout_marginEnd="156dp"
+                android:layout_marginBottom="12dp"
+                app:layout_constraintBottom_toTopOf="@+id/text_billAcceptor"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:srcCompat="@drawable/curved_arrow180y" />
 
-    <TextView
-        android:id="@+id/text_actions"
-        android:layout_width="700dp"
-        android:layout_height="65dp"
-        android:layout_marginTop="208dp"
-        android:textAlignment="center"
-        android:textColor="#b12dba"
-        android:textSize="50dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/text_billAcceptor" />
+            <ImageView
+                android:id="@+id/imageView5"
+                android:layout_width="230dp"
+                android:layout_height="235dp"
+                android:layout_marginEnd="24dp"
+                android:layout_marginBottom="120dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintHorizontal_bias="1.0"
+                app:layout_constraintStart_toEndOf="@+id/text_recharge"
+                app:layout_constraintTop_toBottomOf="@+id/text_billAcceptor"
+                app:layout_constraintVertical_bias="1.0"
+                app:srcCompat="@drawable/curved_arrowh" />
 
-    <TextView
-        android:id="@+id/text_actiondetail"
-        android:layout_width="700dp"
-        android:layout_height="80dp"
-        android:layout_marginTop="28dp"
-        android:textAlignment="center"
-        android:textColor="#b12dba"
-        android:textSize="75dp"
-        android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/text_actions" />
+            <TextView
+                android:id="@+id/text_billAcceptor"
+                android:layout_width="600dp"
+                android:layout_height="150dp"
+                android:layout_marginBottom="152dp"
+                android:fontFamily="casual"
+                android:text="@string/bill_label"
+                android:textColor="#123c80"
+                android:textSize="50dp"
+                android:textStyle="bold"
+                app:layout_constraintBottom_toTopOf="@+id/text_actions"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintHorizontal_bias="0.62"
+                app:layout_constraintStart_toStartOf="parent"
+                tools:text="@string/bill_label" />
+
+            <TextView
+                android:id="@+id/text_actions"
+                android:layout_width="700dp"
+                android:layout_height="120dp"
+                android:layout_marginBottom="16dp"
+                android:textAlignment="center"
+                android:textColor="#b12dba"
+                android:textSize="50dp"
+                app:layout_constraintBottom_toTopOf="@+id/text_actiondetail"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
+
+            <TextView
+                android:id="@+id/text_actiondetail"
+                android:layout_width="700dp"
+                android:layout_height="80dp"
+                android:layout_marginBottom="128dp"
+                android:textAlignment="center"
+                android:textColor="#b12dba"
+                android:textSize="75dp"
+                android:textStyle="bold"
+                app:layout_constraintBottom_toTopOf="@+id/text_recharge"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <pl.droidsonroids.gif.GifImageView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:src="@drawable/finaldemo"
+                />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </RelativeLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

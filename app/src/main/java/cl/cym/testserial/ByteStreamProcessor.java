@@ -14,6 +14,8 @@ public class ByteStreamProcessor implements Runnable {
     private static int[][] deviceStatusesTimeout = new int[3][5];
 
     private static int idleCount;
+    private static int idleGUIStatusCount;
+    private static boolean idling;
 
     private static int[] prices = new int[9];
     private static String[] pricesNames = new String[9];
@@ -31,7 +33,6 @@ public class ByteStreamProcessor implements Runnable {
         ByteStreamProcessor.serialComms = sc;
 
         ByteStreamProcessor.currentPaymentUID = new byte[1];
-        ByteStreamProcessor.currentPaymentUID[0] = 0;
 
         ByteStreamProcessor.currentRechargeStream = new byte[12];
 
@@ -40,29 +41,31 @@ public class ByteStreamProcessor implements Runnable {
         ByteStreamProcessor.deviceStatuses[2] = 0;
 
         ByteStreamProcessor.idleCount = 0;
+        ByteStreamProcessor.idleGUIStatusCount = 0;
+        ByteStreamProcessor.idling = false;
 
         ByteStreamProcessor.nfcPaymentCardType = -1;
         ByteStreamProcessor.nfcRechargeCardType = -1;
 
         ByteStreamProcessor.prices[0] = 0;
-        ByteStreamProcessor.prices[1] = 0;
+        ByteStreamProcessor.prices[1] = 170;
         ByteStreamProcessor.prices[2] = 170;
-        ByteStreamProcessor.prices[3] = 170;
-        ByteStreamProcessor.prices[4] = 400;
-        ByteStreamProcessor.prices[5] = 350;
+        ByteStreamProcessor.prices[3] = 400;
+        ByteStreamProcessor.prices[4] = 350;
+        ByteStreamProcessor.prices[5] = 0;
         ByteStreamProcessor.prices[6] = 0;
         ByteStreamProcessor.prices[7] = 0;
         ByteStreamProcessor.prices[8] = 0;
 
-        ByteStreamProcessor.pricesNames[0] = "NO DEFINIDO";
-        ByteStreamProcessor.pricesNames[1] = "TNE BASICA";
-        ByteStreamProcessor.pricesNames[2] = "TNE MEDIA";
-        ByteStreamProcessor.pricesNames[3] = "TNE SUPERIOR";
-        ByteStreamProcessor.pricesNames[4] = "ADULTO";
-        ByteStreamProcessor.pricesNames[5] = "ADULTO MAYOR";
-        ByteStreamProcessor.pricesNames[0] = "NO DEFINIDO";
-        ByteStreamProcessor.pricesNames[0] = "NO DEFINIDO";
-        ByteStreamProcessor.pricesNames[0] = "NO DEFINIDO";
+        ByteStreamProcessor.pricesNames[0] = "TNE BASICA";
+        ByteStreamProcessor.pricesNames[1] = "TNE MEDIA";
+        ByteStreamProcessor.pricesNames[2] = "TNE SUPERIOR";
+        ByteStreamProcessor.pricesNames[3] = "ADULTO";
+        ByteStreamProcessor.pricesNames[4] = "ADULTO MAYOR";
+        ByteStreamProcessor.pricesNames[5] = "NO DEFINIDO 5";
+        ByteStreamProcessor.pricesNames[6] = "NO DEFINIDO 6";
+        ByteStreamProcessor.pricesNames[7] = "NO DEFINIDO 7";
+        ByteStreamProcessor.pricesNames[8] = "NO DEFINIDO 8";
 
         ByteStreamProcessor.billValues[0] = 1000;
         ByteStreamProcessor.billValues[1] = 2000;
@@ -164,9 +167,10 @@ public class ByteStreamProcessor implements Runnable {
 
                                     int[] contentToInt = ByteHandleUtils.byteArrayToUnsignedIntArray(streamContent);
 
-                                    if(ByteHandleUtils.intArraysEquals(idleStreamContent, contentToInt)){
+                                    if(ByteHandleUtils.intArraysEquals(idleStreamContent, contentToInt) && !idling){
 
                                         ByteStreamProcessor.idleCount++;
+                                        ByteStreamProcessor.idleGUIStatusCount++;
 
                                         if(idleCount > 4){
 
@@ -175,11 +179,44 @@ public class ByteStreamProcessor implements Runnable {
                                             synchronized (SerialComms.getInstance()){
 
                                                 SerialComms.clearActionText();
+                                                SerialComms.setPayStatus();
+
+                                                try {
+                                                    SerialComms.serialWrite(SerialComms.formatStream(getLEDStream(2,"idle"), true));
+                                                } catch (IOException e) {
+                                                    e.printStackTrace();
+                                                }
                                             }
                                         }
-                                    }else{
 
-                                        ByteStreamProcessor.idleCount = 0;
+                                        if(idleGUIStatusCount >= 20){
+
+                                            idling = true;
+
+                                            synchronized (SerialComms.getInstance()){
+
+                                                SerialComms.setIdleStatus();
+                                            }
+                                        }
+                                    }else if(!ByteHandleUtils.intArraysEquals(idleStreamContent, contentToInt)){
+
+                                        idling = false;
+                                        idleCount = 0;
+                                        idleGUIStatusCount = 0;
+
+                                        synchronized (SerialComms.getInstance()){
+
+                                            if(contentToInt[4] != 1){
+
+                                                SerialComms.setRechargeStatus();
+
+                                            }else if(contentToInt[3] != 1){
+
+                                                SerialComms.setPayStatus();
+                                            }
+                                        }
+
+
                                     }
 
                                     if(ByteHandleUtils.byteToInt(streamContent[3]) > 1){
@@ -408,7 +445,7 @@ public class ByteStreamProcessor implements Runnable {
                                                             SerialComms.setWriting(true);
                                                             SerialComms.setLastWriteTS(System.currentTimeMillis());
                                                            //SerialComms.listAction("Recargando "+billValues[ByteHandleUtils.byteToInt(streamContent[2])-1]+" - "+ByteHandleUtils.byteArrayToString(finalStream));
-                                                            SerialComms.setActionText("RECARGANDO", billValues[ByteHandleUtils.byteToInt(streamContent[2])-1]+"");
+                                                            SerialComms.setActionText("RECARGANDO", "$"+billValues[ByteHandleUtils.byteToInt(streamContent[2])-1]);
                                                             SerialComms.serialWrite(finalStream);
 
                                                             Thread.sleep(100);
@@ -595,8 +632,15 @@ public class ByteStreamProcessor implements Runnable {
                                                                     //make change on UI
 
                                                                     synchronized (SerialComms.getInstance()){
+
+                                                                        try {
+                                                                            SerialComms.serialWrite(SerialComms.formatStream(getLEDStream(2,"error"), true));
+                                                                        } catch (IOException e) {
+                                                                            e.printStackTrace();
+                                                                        }
+
                                                                         //SerialComms.listAction("Saldo Insuficiente");
-                                                                        SerialComms.setActionText("SALDO INSUFICIENTE - "+lastPaymentType, integerBalance+"");
+                                                                        SerialComms.setActionText("SALDO INSUFICIENTE\n "+lastPaymentType, "SALDO $"+integerBalance);
                                                                         SerialComms.playSound("error");
                                                                         SerialComms.setWaitingCommandResponse(false);
                                                                     }
@@ -612,8 +656,15 @@ public class ByteStreamProcessor implements Runnable {
 
                                                                 //show balance
                                                                 synchronized (SerialComms.getInstance()){
+
+                                                                    try {
+                                                                        SerialComms.serialWrite(SerialComms.formatStream(getLEDStream(2,"success"), true));
+                                                                    } catch (IOException e) {
+                                                                        e.printStackTrace();
+                                                                    }
+
                                                                     //SerialComms.listAction("Nuevo Saldo: "+integerBalance);
-                                                                    SerialComms.setActionText("PAGADO "+lastPaymentType, "SALDO: $"+integerBalance+"");
+                                                                    SerialComms.setActionText("PAGADO\n "+lastPaymentType, "SALDO: $"+integerBalance+"");
                                                                     SerialComms.playSound("correct");
                                                                     SerialComms.setWaitingCommandResponse(false);
                                                                 }
@@ -676,8 +727,11 @@ public class ByteStreamProcessor implements Runnable {
 
                                                             //show balance
                                                             synchronized (SerialComms.getInstance()){
+
+                                                                SerialComms.setRechargeStatus();
+
                                                                 //SerialComms.listAction("Saldo actual: "+integerBalance);
-                                                                SerialComms.setActionText("SALDO ACTUAL", integerBalance+"");
+                                                                SerialComms.setActionText("SALDO ACTUAL", "$"+integerBalance);
                                                                 SerialComms.setWaitingCommandResponse(false);
                                                             }
 
@@ -811,5 +865,68 @@ public class ByteStreamProcessor implements Runnable {
         }
 
         ByteStreamProcessor.setDeviceStatuses(newStatuses);
+    }
+
+    //devices: 1,2,3 --- types: "success", "error", "idle"
+    public static synchronized byte[] getLEDStream(int device, String type){
+
+        byte[] ledStream = new byte[7];
+        ledStream[0] = ByteHandleUtils.intToByte(67);
+        ledStream[1] = ByteHandleUtils.intToByte(device);
+        ledStream[2] = ByteHandleUtils.intToByte(76);
+
+        switch (device){
+            case 2:
+                switch (type){
+                    case "success":
+                        ledStream[3] = ByteHandleUtils.intToByte(3);
+                        ledStream[4] = ByteHandleUtils.intToByte(0);
+                        ledStream[5] = ByteHandleUtils.intToByte(255);
+                        ledStream[6] = ByteHandleUtils.intToByte(0);
+                        break;
+
+                    case "error":
+                        ledStream[3] = ByteHandleUtils.intToByte(4);
+                        ledStream[4] = ByteHandleUtils.intToByte(255);
+                        ledStream[5] = ByteHandleUtils.intToByte(0);
+                        ledStream[6] = ByteHandleUtils.intToByte(0);
+                        break;
+
+                    case "idle":
+                        ledStream[3] = ByteHandleUtils.intToByte(1);
+                        ledStream[4] = ByteHandleUtils.intToByte(0);
+                        ledStream[5] = ByteHandleUtils.intToByte(0);
+                        ledStream[6] = ByteHandleUtils.intToByte(0);
+                        break;
+                }
+                break;
+
+            default:
+                switch (type){
+                    case "success":
+                        ledStream[3] = ByteHandleUtils.intToByte(200);
+                        ledStream[4] = ByteHandleUtils.intToByte(0);
+                        ledStream[5] = ByteHandleUtils.intToByte(250);
+                        ledStream[6] = ByteHandleUtils.intToByte(0);
+                        break;
+
+                    case "error":
+                        ledStream[3] = ByteHandleUtils.intToByte(201);
+                        ledStream[4] = ByteHandleUtils.intToByte(250);
+                        ledStream[5] = ByteHandleUtils.intToByte(0);
+                        ledStream[6] = ByteHandleUtils.intToByte(0);
+                        break;
+
+                    case "idle":
+                        ledStream[3] = ByteHandleUtils.intToByte(202);
+                        ledStream[4] = ByteHandleUtils.intToByte(0);
+                        ledStream[5] = ByteHandleUtils.intToByte(0);
+                        ledStream[6] = ByteHandleUtils.intToByte(255);
+                        break;
+                }
+                break;
+        }
+
+        return ledStream;
     }
 }

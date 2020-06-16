@@ -1,6 +1,7 @@
 package cl.cym.testserial;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.constraintlayout.widget.ConstraintLayout;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -11,8 +12,10 @@ import android.media.AudioAttributes;
 import android.media.SoundPool;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -35,10 +38,27 @@ public class MainActivity extends AppCompatActivity {
     private static HashMap<Integer, Integer> soundPoolMap;
     private static final int correctSound = R.raw.s1_8bitsuccess;
     private static final int errorSound = R.raw.s2_8biterror;
+    private static ImageView payArrow;
+    private static ImageView billArrow;
+    private static TextView payText;
+    private static TextView billText;
+    private static ConstraintLayout mainContent;
+    private static ConstraintLayout overlay;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        payArrow = (ImageView)findViewById(R.id.img_payArrow);
+        billArrow = (ImageView)findViewById(R.id.img_billArrow);
+        payText = (TextView)findViewById(R.id.text_pay);
+        billText = (TextView)findViewById(R.id.text_billAcceptor);
+        mainContent = (ConstraintLayout)findViewById(R.id.main_content);
+        overlay = (ConstraintLayout)findViewById(R.id.overlay);
 
         AudioAttributes audioAttributes = new AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
@@ -48,11 +68,10 @@ public class MainActivity extends AppCompatActivity {
         this.soundPool = new SoundPool.Builder().setMaxStreams(6).setAudioAttributes(audioAttributes).build();
         this.soundPoolMap = new HashMap<Integer, Integer>(3);
 
-        this.soundPoolMap.put(correctSound, soundPool.load(getApplicationContext(), R.raw.s1_8bitsuccess,1));
-        this.soundPoolMap.put(errorSound, soundPool.load(getApplicationContext(), R.raw.s2_8biterror,2));
+        this.soundPoolMap.put(correctSound, soundPool.load(getApplicationContext(), R.raw.success,1));
+        this.soundPoolMap.put(errorSound, soundPool.load(getApplicationContext(), R.raw.error,2));
 
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+
         this.serialComms = SerialComms.getInstance();
 
         synchronized (serialComms){
@@ -103,6 +122,8 @@ public class MainActivity extends AppCompatActivity {
 
         serialCommsThread = new Thread(serialComms);
         serialCommsThread.start();
+
+        changeToPayStatus();
     }
 
     @Override
@@ -205,5 +226,32 @@ public class MainActivity extends AppCompatActivity {
     public static synchronized int getErrorSound(){
 
         return errorSound;
+    }
+
+    public synchronized void changeToIdleStatus(){
+
+        overlay.setVisibility(View.VISIBLE);
+    }
+
+    public synchronized void changeToPayStatus(){
+
+        overlay.setVisibility(View.GONE);
+
+        payText.setVisibility(View.VISIBLE);
+        payArrow.setVisibility(View.VISIBLE);
+
+        billText.setVisibility(View.GONE);
+        billArrow.setVisibility(View.GONE);
+    }
+
+    public synchronized void changeToRechargeStatus(){
+
+        overlay.setVisibility(View.GONE);
+
+        payText.setVisibility(View.GONE);
+        payArrow.setVisibility(View.GONE);
+
+        billArrow.setVisibility(View.VISIBLE);
+        billText.setVisibility(View.VISIBLE);
     }
 }

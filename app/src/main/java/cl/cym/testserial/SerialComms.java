@@ -5,6 +5,8 @@ import android.hardware.usb.UsbManager;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.SoundPool;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.appcompat.app.AppCompatActivity;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
@@ -510,5 +512,36 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
                 }
             }
         });
+    }
+
+    public static synchronized void setIdleStatus(){
+
+        new Handler(Looper.getMainLooper()).post(new Runnable() { // Tried new Handler(Looper.myLopper()) also
+            @Override
+            public void run() {
+                activityRef.changeToIdleStatus();
+            }
+        });
+    }
+
+    public static synchronized void setPayStatus(){
+
+        new Handler(Looper.getMainLooper()).post(new Runnable() { // Tried new Handler(Looper.myLopper()) also
+            @Override
+            public void run() {
+                activityRef.changeToPayStatus();
+            }
+        });
+    }
+
+    public static synchronized void setRechargeStatus(){
+
+        new Handler(Looper.getMainLooper()).post(new Runnable() { // Tried new Handler(Looper.myLopper()) also
+            @Override
+            public void run() {
+                activityRef.changeToRechargeStatus();
+            }
+        });
+
     }
 }
