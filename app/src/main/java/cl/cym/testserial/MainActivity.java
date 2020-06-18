@@ -36,8 +36,8 @@ public class MainActivity extends AppCompatActivity {
     private ArrayAdapter<String> streamHistoryAdapter;
     private static SoundPool soundPool;
     private static HashMap<Integer, Integer> soundPoolMap;
-    private static final int correctSound = R.raw.s1_8bitsuccess;
-    private static final int errorSound = R.raw.s2_8biterror;
+    private static final int correctSound = R.raw.successvolup;
+    private static final int errorSound = R.raw.errorvolup;
     private static ImageView payArrow;
     private static ImageView billArrow;
     private static TextView payText;
@@ -68,8 +68,8 @@ public class MainActivity extends AppCompatActivity {
         this.soundPool = new SoundPool.Builder().setMaxStreams(6).setAudioAttributes(audioAttributes).build();
         this.soundPoolMap = new HashMap<Integer, Integer>(3);
 
-        this.soundPoolMap.put(correctSound, soundPool.load(getApplicationContext(), R.raw.success,1));
-        this.soundPoolMap.put(errorSound, soundPool.load(getApplicationContext(), R.raw.error,2));
+        this.soundPoolMap.put(correctSound, soundPool.load(getApplicationContext(), R.raw.successvolup,1));
+        this.soundPoolMap.put(errorSound, soundPool.load(getApplicationContext(), R.raw.errorvolup,2));
 
 
         this.serialComms = SerialComms.getInstance();

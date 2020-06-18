@@ -25,8 +25,8 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
     private static SerialComms serial;
     private static ByteStreamProcessor streamProcessor;
     private static MainActivity activityRef;
-    private static final int WRITE_WAIT_MILLIS = 500;
-    private static final int READ_WAIT_MILLIS = 1000;
+    private static final int WRITE_WAIT_MILLIS = 250;
+    private static final int READ_WAIT_MILLIS = 500;
     private static int baudRate = 57600;
     private static UsbSerialPort currentConnection;
     private static List<UsbSerialDriver> availableDrivers;
@@ -77,6 +77,13 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
             SerialComms.setReading(false);
             setLastReadTS(System.currentTimeMillis());
         }
+
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
     }
 
     @Override

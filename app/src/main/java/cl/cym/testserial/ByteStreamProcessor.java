@@ -28,6 +28,10 @@ public class ByteStreamProcessor implements Runnable {
     private static int nfcPaymentCardType;
     private static int nfcRechargeCardType;
 
+    private static String lastLedType;
+
+    private static String lastAction;
+
     public ByteStreamProcessor(SerialComms sc){
 
         ByteStreamProcessor.serialComms = sc;
@@ -43,6 +47,8 @@ public class ByteStreamProcessor implements Runnable {
         ByteStreamProcessor.idleCount = 0;
         ByteStreamProcessor.idleGUIStatusCount = 0;
         ByteStreamProcessor.idling = false;
+        ByteStreamProcessor.lastLedType = "none";
+        ByteStreamProcessor.lastAction = "none";
 
         ByteStreamProcessor.nfcPaymentCardType = -1;
         ByteStreamProcessor.nfcRechargeCardType = -1;
@@ -172,30 +178,65 @@ public class ByteStreamProcessor implements Runnable {
                                         ByteStreamProcessor.idleCount++;
                                         ByteStreamProcessor.idleGUIStatusCount++;
 
+                                        if(lastAction.equals("recharge")){
+
+                                            lastAction = "none";
+
+                                            synchronized (SerialComms.getInstance()){
+
+                                                SerialComms.setPayStatus();
+                                                SerialComms.clearActionText();
+
+                                                if(lastLedType != "idle"){
+
+                                                    try {
+                                                        SerialComms.serialWrite(SerialComms.formatStream(getLEDStream(2,"idle"), true));
+                                                    } catch (IOException e) {
+                                                        e.printStackTrace();
+                                                    }
+                                                }
+                                            }
+                                        }else if(lastAction != "none"){
+
+                                            lastAction = "none";
+                                        }
+
                                         if(idleCount > 4){
 
                                             ByteStreamProcessor.idleCount = 0;
 
-                                            synchronized (SerialComms.getInstance()){
+                                            SerialComms.clearActionText();
+                                            SerialComms.setPayStatus();
 
-                                                SerialComms.clearActionText();
-                                                SerialComms.setPayStatus();
+                                            if(lastLedType != "idle"){
 
-                                                try {
-                                                    SerialComms.serialWrite(SerialComms.formatStream(getLEDStream(2,"idle"), true));
-                                                } catch (IOException e) {
-                                                    e.printStackTrace();
+                                                synchronized (SerialComms.getInstance()){
+
+                                                    try {
+                                                        SerialComms.serialWrite(SerialComms.formatStream(getLEDStream(2,"idle"), true));
+                                                    } catch (IOException e) {
+                                                        e.printStackTrace();
+                                                    }
                                                 }
                                             }
                                         }
 
-                                        if(idleGUIStatusCount >= 20){
+                                        if(idleGUIStatusCount >= 30){
 
                                             idling = true;
 
                                             synchronized (SerialComms.getInstance()){
 
                                                 SerialComms.setIdleStatus();
+
+                                                if(lastLedType != "idle"){
+
+                                                    try {
+                                                        SerialComms.serialWrite(SerialComms.formatStream(getLEDStream(2,"idle"), true));
+                                                    } catch (IOException e) {
+                                                        e.printStackTrace();
+                                                    }
+                                                }
                                             }
                                         }
                                     }else if(!ByteHandleUtils.intArraysEquals(idleStreamContent, contentToInt)){
@@ -234,32 +275,35 @@ public class ByteStreamProcessor implements Runnable {
                                                 break;
                                             case 1:
                                                 //card detected
-                                                //if card detected, get balance
+                                                //if card detected, and is not recharging, get balance
                                                 //127 67 DN 83 MSB LSB
-                                                byte[] saldoStream = new byte[3];
-                                                saldoStream[0] = ByteHandleUtils.intToByte(67);
-                                                saldoStream[1] = ByteHandleUtils.intToByte(2);
-                                                saldoStream[2] = ByteHandleUtils.intToByte(83);
+                                                if(!lastAction.equals("recharge")){
 
-                                                ByteStreamProcessor.setNfcPaymentCardType(ByteHandleUtils.byteToInt(streamContent[3]));
+                                                    byte[] saldoStream = new byte[3];
+                                                    saldoStream[0] = ByteHandleUtils.intToByte(67);
+                                                    saldoStream[1] = ByteHandleUtils.intToByte(2);
+                                                    saldoStream[2] = ByteHandleUtils.intToByte(83);
 
-                                                synchronized (SerialComms.getInstance()){
+                                                    ByteStreamProcessor.setNfcPaymentCardType(ByteHandleUtils.byteToInt(streamContent[3]));
 
-                                                    byte[] finalStream = SerialComms.formatStream(saldoStream, true);
+                                                    synchronized (SerialComms.getInstance()){
 
-                                                    try {
-                                                        SerialComms.setWriting(true);
-                                                        SerialComms.setWaitingCommandResponse(true);
-                                                        SerialComms.setLastWriteTS(System.currentTimeMillis());
-                                                        //SerialComms.listAction("Tarjeta detectada en pago, pidiendo saldo - "+ByteHandleUtils.byteArrayToString(finalStream));
-                                                        SerialComms.serialWrite(finalStream);
-                                                    } catch (IOException e) {
-                                                        e.printStackTrace();
-                                                        SerialComms.setWriting(false);
+                                                        byte[] finalStream = SerialComms.formatStream(saldoStream, true);
+
+                                                        try {
+                                                            SerialComms.setWriting(true);
+                                                            SerialComms.setWaitingCommandResponse(true);
+                                                            SerialComms.setLastWriteTS(System.currentTimeMillis());
+                                                            //SerialComms.listAction("Tarjeta detectada en pago, pidiendo saldo - "+ByteHandleUtils.byteArrayToString(finalStream));
+                                                            SerialComms.serialWrite(finalStream);
+                                                        } catch (IOException e) {
+                                                            e.printStackTrace();
+                                                            SerialComms.setWriting(false);
+                                                        }
                                                     }
-                                                }
 
-                                                ByteStreamProcessor.deviceStatuses[1] = 2;
+                                                    ByteStreamProcessor.deviceStatuses[1] = 2;
+                                                }
 
                                                 break;
                                             case 2:
@@ -725,6 +769,8 @@ public class ByteStreamProcessor implements Runnable {
                                                             //waiting for balance
                                                             //on polling switch asked for balance. process
 
+                                                            lastAction = "recharge";
+
                                                             //show balance
                                                             synchronized (SerialComms.getInstance()){
 
@@ -879,6 +925,7 @@ public class ByteStreamProcessor implements Runnable {
             case 2:
                 switch (type){
                     case "success":
+                        lastLedType = type;
                         ledStream[3] = ByteHandleUtils.intToByte(3);
                         ledStream[4] = ByteHandleUtils.intToByte(0);
                         ledStream[5] = ByteHandleUtils.intToByte(255);
@@ -886,6 +933,7 @@ public class ByteStreamProcessor implements Runnable {
                         break;
 
                     case "error":
+                        lastLedType = type;
                         ledStream[3] = ByteHandleUtils.intToByte(4);
                         ledStream[4] = ByteHandleUtils.intToByte(255);
                         ledStream[5] = ByteHandleUtils.intToByte(0);
@@ -893,10 +941,14 @@ public class ByteStreamProcessor implements Runnable {
                         break;
 
                     case "idle":
+                        lastLedType = type;
                         ledStream[3] = ByteHandleUtils.intToByte(1);
                         ledStream[4] = ByteHandleUtils.intToByte(0);
                         ledStream[5] = ByteHandleUtils.intToByte(0);
                         ledStream[6] = ByteHandleUtils.intToByte(0);
+                        break;
+                    default:
+                        lastLedType = "none";
                         break;
                 }
                 break;
@@ -904,6 +956,7 @@ public class ByteStreamProcessor implements Runnable {
             default:
                 switch (type){
                     case "success":
+                        lastLedType = type;
                         ledStream[3] = ByteHandleUtils.intToByte(200);
                         ledStream[4] = ByteHandleUtils.intToByte(0);
                         ledStream[5] = ByteHandleUtils.intToByte(250);
@@ -911,6 +964,7 @@ public class ByteStreamProcessor implements Runnable {
                         break;
 
                     case "error":
+                        lastLedType = type;
                         ledStream[3] = ByteHandleUtils.intToByte(201);
                         ledStream[4] = ByteHandleUtils.intToByte(250);
                         ledStream[5] = ByteHandleUtils.intToByte(0);
@@ -918,10 +972,14 @@ public class ByteStreamProcessor implements Runnable {
                         break;
 
                     case "idle":
+                        lastLedType = type;
                         ledStream[3] = ByteHandleUtils.intToByte(202);
                         ledStream[4] = ByteHandleUtils.intToByte(0);
                         ledStream[5] = ByteHandleUtils.intToByte(0);
                         ledStream[6] = ByteHandleUtils.intToByte(255);
+                        break;
+                    default:
+                        lastLedType = "none";
                         break;
                 }
                 break;
