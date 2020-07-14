@@ -551,4 +551,14 @@ public class SerialComms extends AppCompatActivity implements Runnable, SerialIn
         });
 
     }
+
+    public static synchronized  void setElectronicKeyStatus(){
+
+        new Handler(Looper.getMainLooper()).post(new Runnable() { // Tried new Handler(Looper.myLopper()) also
+            @Override
+            public void run() {
+                activityRef.changeToElectronicKeyStatus();
+            }
+        });
+    }
 }

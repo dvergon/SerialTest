@@ -40,8 +40,11 @@ public class MainActivity extends AppCompatActivity {
     private static final int errorSound = R.raw.errorvolup;
     private static ImageView payArrow;
     private static ImageView billArrow;
+    private static ImageView rechargeArrow;
     private static TextView payText;
     private static TextView billText;
+    private static TextView rechargeText;
+    private static TextView electronicKeyText;
     private static ConstraintLayout mainContent;
     private static ConstraintLayout overlay;
 
@@ -59,6 +62,9 @@ public class MainActivity extends AppCompatActivity {
         billText = (TextView)findViewById(R.id.text_billAcceptor);
         mainContent = (ConstraintLayout)findViewById(R.id.main_content);
         overlay = (ConstraintLayout)findViewById(R.id.overlay);
+        electronicKeyText = (TextView)findViewById(R.id.text_electronicKey);
+        rechargeArrow = (ImageView)findViewById(R.id.img_rechargeArrow);
+        rechargeText = (TextView)findViewById(R.id.text_recharge);
 
         AudioAttributes audioAttributes = new AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
@@ -242,6 +248,11 @@ public class MainActivity extends AppCompatActivity {
 
         billText.setVisibility(View.GONE);
         billArrow.setVisibility(View.GONE);
+
+        rechargeText.setVisibility(View.VISIBLE);
+        rechargeArrow.setVisibility(View.VISIBLE);
+
+        electronicKeyText.setVisibility(View.GONE);
     }
 
     public synchronized void changeToRechargeStatus(){
@@ -253,5 +264,26 @@ public class MainActivity extends AppCompatActivity {
 
         billArrow.setVisibility(View.VISIBLE);
         billText.setVisibility(View.VISIBLE);
+
+        rechargeText.setVisibility(View.VISIBLE);
+        rechargeArrow.setVisibility(View.VISIBLE);
+
+        electronicKeyText.setVisibility(View.GONE);
+    }
+
+    public synchronized void changeToElectronicKeyStatus(){
+
+        overlay.setVisibility(View.GONE);
+
+        payText.setVisibility(View.GONE);
+        payArrow.setVisibility(View.GONE);
+
+        billText.setVisibility(View.GONE);
+        billArrow.setVisibility(View.GONE);
+
+        rechargeText.setVisibility(View.GONE);
+        rechargeArrow.setVisibility(View.GONE);
+
+        electronicKeyText.setVisibility(View.VISIBLE);
     }
 }

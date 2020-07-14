@@ -5,4 +5,5 @@
     <string name="recharge_label">Inserta tu tarjeta para realizar una recarga o consultar tu saldo</string>
     <string name="action"></string>
     <string name="action_detail"></string>
+    <string name="electronic_key_warning">Llave electrónica detectada.\nCaja de recaudación disponible para ser retirada.</string>
 </resources>

@@ -27,6 +27,7 @@ public class ByteStreamProcessor implements Runnable {
 
     private static int nfcPaymentCardType;
     private static int nfcRechargeCardType;
+    private static boolean nfcPaymentAvailable;
 
     private static String lastLedType;
 
@@ -173,6 +174,11 @@ public class ByteStreamProcessor implements Runnable {
 
                                     int[] contentToInt = ByteHandleUtils.byteArrayToUnsignedIntArray(streamContent);
 
+                                    if(contentToInt[3] == 1){
+
+                                        nfcPaymentAvailable = true;
+                                    }
+
                                     if(ByteHandleUtils.intArraysEquals(idleStreamContent, contentToInt) && !idling){
 
                                         ByteStreamProcessor.idleCount++;
@@ -247,9 +253,13 @@ public class ByteStreamProcessor implements Runnable {
 
                                         synchronized (SerialComms.getInstance()){
 
-                                            if(contentToInt[4] != 1){
+                                            if(contentToInt[4] > 10){
 
                                                 SerialComms.setRechargeStatus();
+
+                                            }else if(contentToInt[4] == 2){
+
+                                                SerialComms.setElectronicKeyStatus();
 
                                             }else if(contentToInt[3] != 1){
 
@@ -277,32 +287,40 @@ public class ByteStreamProcessor implements Runnable {
                                                 //card detected
                                                 //if card detected, and is not recharging, get balance
                                                 //127 67 DN 83 MSB LSB
-                                                if(!lastAction.equals("recharge")){
 
-                                                    byte[] saldoStream = new byte[3];
-                                                    saldoStream[0] = ByteHandleUtils.intToByte(67);
-                                                    saldoStream[1] = ByteHandleUtils.intToByte(2);
-                                                    saldoStream[2] = ByteHandleUtils.intToByte(83);
+                                                if(nfcPaymentAvailable){
 
-                                                    ByteStreamProcessor.setNfcPaymentCardType(ByteHandleUtils.byteToInt(streamContent[3]));
+                                                    if(!lastAction.equals("recharge")){
 
-                                                    synchronized (SerialComms.getInstance()){
+                                                        byte[] saldoStream = new byte[3];
+                                                        saldoStream[0] = ByteHandleUtils.intToByte(67);
+                                                        saldoStream[1] = ByteHandleUtils.intToByte(2);
+                                                        saldoStream[2] = ByteHandleUtils.intToByte(83);
 
-                                                        byte[] finalStream = SerialComms.formatStream(saldoStream, true);
+                                                        ByteStreamProcessor.setNfcPaymentCardType(ByteHandleUtils.byteToInt(streamContent[3]));
 
-                                                        try {
-                                                            SerialComms.setWriting(true);
-                                                            SerialComms.setWaitingCommandResponse(true);
-                                                            SerialComms.setLastWriteTS(System.currentTimeMillis());
-                                                            //SerialComms.listAction("Tarjeta detectada en pago, pidiendo saldo - "+ByteHandleUtils.byteArrayToString(finalStream));
-                                                            SerialComms.serialWrite(finalStream);
-                                                        } catch (IOException e) {
-                                                            e.printStackTrace();
-                                                            SerialComms.setWriting(false);
+                                                        synchronized (SerialComms.getInstance()){
+
+                                                            byte[] finalStream = SerialComms.formatStream(saldoStream, true);
+
+                                                            try {
+                                                                SerialComms.setWriting(true);
+                                                                SerialComms.setWaitingCommandResponse(true);
+                                                                SerialComms.setLastWriteTS(System.currentTimeMillis());
+                                                                //SerialComms.listAction("Tarjeta detectada en pago, pidiendo saldo - "+ByteHandleUtils.byteArrayToString(finalStream));
+                                                                SerialComms.serialWrite(finalStream);
+                                                            } catch (IOException e) {
+                                                                e.printStackTrace();
+                                                                SerialComms.setWriting(false);
+                                                            }
                                                         }
+
+                                                        ByteStreamProcessor.deviceStatuses[1] = 2;
                                                     }
 
-                                                    ByteStreamProcessor.deviceStatuses[1] = 2;
+                                                }else{
+
+                                                    ByteStreamProcessor.deviceStatuses[1] = 0;
                                                 }
 
                                                 break;
@@ -344,7 +362,7 @@ public class ByteStreamProcessor implements Runnable {
                                     //D1 and D3 work in tandem, so both of them will be sharing the same control structure
                                     //D1 acts as an slave, depending on D3 status D1 reacts
 
-                                    if(ByteHandleUtils.byteToInt(streamContent[4]) > 1){
+                                    if(ByteHandleUtils.byteToInt(streamContent[4]) > 10){
 
                                         //change to reading card if idle
                                         if(ByteStreamProcessor.deviceStatuses[2] == 0){
@@ -713,6 +731,7 @@ public class ByteStreamProcessor implements Runnable {
                                                                     SerialComms.setWaitingCommandResponse(false);
                                                                 }
 
+                                                                nfcPaymentAvailable = false;
                                                                 lastPaymentType = "";
 
                                                                 ByteStreamProcessor.deviceStatuses[1] = 0;
